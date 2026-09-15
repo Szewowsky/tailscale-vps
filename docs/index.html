@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zamykam serwer VPS na świat · poradnik po odcinku</title>
+<meta name="description" content="Jedna wklejka do Claude Code i agent chowa Twój serwer VPS za prywatną siecią Tailscale: SSH znika z internetu, Ty wchodzisz z laptopa i telefonu, publiczne usługi działają dalej.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔒</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,300..800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#1A192C;
+    --bg-2:#211F38;
+    --bg-3:#141322;
+    --ink:#EDEAF6;
+    --ink-dim:#A9A4C2;
+    --line:#312E4C;
+    --orange:#F39F06;
+    --orange-soft:rgba(243,159,6,.12);
+    --green:#4ADE80;
+    --red:#F87171;
+    --yellow:#FACC15;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,monospace;
+    --disp:'Bricolage Grotesque','Instrument Sans',sans-serif;
+    --body:'Instrument Sans',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--ink);font-family:var(--body);
+    font-size:17px;line-height:1.65;-webkit-font-smoothing:antialiased;
+    background-image:
+      radial-gradient(1200px 500px at 80% -10%, rgba(243,159,6,.07), transparent 60%),
+      radial-gradient(900px 500px at -10% 30%, rgba(122,90,248,.08), transparent 55%);
+  }
+  ::selection{background:var(--orange);color:var(--bg)}
+  .wrap{max-width:860px;margin:0 auto;padding:0 24px}
+  a{color:var(--orange);text-decoration:none;border-bottom:1px solid rgba(243,159,6,.35)}
+  a:hover{border-bottom-color:var(--orange)}
+  code.inline{font-family:var(--mono);font-size:13.5px;color:var(--orange);
+    background:rgba(243,159,6,.08);padding:2px 7px;border-radius:6px}
+
+  /* HERO */
+  header{padding:72px 0 40px;border-bottom:1px solid var(--line)}
+  .kicker{
+    font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;
+    color:var(--orange);display:flex;align-items:center;gap:12px;margin-bottom:22px;
+  }
+  .kicker::before{content:"";display:inline-block;width:34px;height:2px;background:var(--orange)}
+  h1{
+    font-family:var(--disp);font-weight:750;font-size:clamp(34px,6vw,58px);
+    line-height:1.04;letter-spacing:-.02em;margin-bottom:20px;
+  }
+  h1 em{font-style:normal;color:var(--orange)}
+  .lede{font-size:clamp(17px,2.2vw,20px);color:var(--ink-dim);max-width:640px}
+  .lede strong{color:var(--ink);font-weight:600}
+  .hero-meta{
+    display:flex;flex-wrap:wrap;gap:10px;margin-top:28px;font-family:var(--mono);font-size:12.5px;
+  }
+  .chip{
+    border:1px solid var(--line);border-radius:999px;padding:6px 14px;color:var(--ink-dim);
+    background:rgba(255,255,255,.02)
+  }
+  .chip b{color:var(--green);font-weight:600}
+
+  /* SECTIONS */
+  section{padding:56px 0;border-bottom:1px solid var(--line)}
+  .step-tag{
+    font-family:var(--mono);font-size:13px;color:var(--orange);letter-spacing:.14em;margin-bottom:10px;
+  }
+  h2{
+    font-family:var(--disp);font-weight:700;font-size:clamp(24px,3.6vw,34px);
+    letter-spacing:-.015em;line-height:1.15;margin-bottom:16px;
+  }
+  h3{font-family:var(--disp);font-weight:650;font-size:19px;margin:26px 0 8px}
+  p{margin-bottom:14px;color:var(--ink-dim)}
+  p strong,li strong{color:var(--ink);font-weight:600}
+  ul.plain{list-style:none;margin:18px 0}
+  ul.plain li{
+    padding:10px 0 10px 30px;position:relative;color:var(--ink-dim);border-top:1px dashed var(--line)
+  }
+  ul.plain li:last-child{border-bottom:1px dashed var(--line)}
+  ul.plain li::before{content:"›";position:absolute;left:6px;color:var(--orange);font-family:var(--mono)}
+
+  /* CODE / TERMINAL */
+  .codeblock{
+    position:relative;margin:20px 0;border:1px solid var(--line);border-radius:12px;
+    background:var(--bg-3);overflow:hidden;
+  }
+  .codebar{
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    padding:9px 14px;border-bottom:1px solid var(--line);
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;color:var(--ink-dim);
+    text-transform:uppercase;background:rgba(255,255,255,.02)
+  }
+  .copy-btn{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;cursor:pointer;
+    background:var(--orange);color:#1A192C;border:0;border-radius:7px;padding:6px 14px;
+    font-weight:600;transition:transform .08s ease, background .15s;
+  }
+  .copy-btn:hover{background:#ffb42a}
+  .copy-btn:active{transform:scale(.96)}
+  .copy-btn.done{background:var(--green)}
+  pre{
+    padding:18px 18px 20px;overflow-x:auto;font-family:var(--mono);
+    font-size:13.5px;line-height:1.7;color:#DCD8EE;white-space:pre-wrap;word-break:break-word;
+  }
+  .term pre{white-space:pre;word-break:normal}
+  .t-pass{color:var(--green)}
+  .t-fail{color:var(--red)}
+  .t-warn{color:var(--yellow)}
+  .t-dim{color:#6E6990}
+  .t-orange{color:var(--orange)}
+
+  /* CALLOUTS */
+  .warn{
+    display:flex;gap:14px;margin:22px 0;padding:16px 18px;border-radius:12px;
+    background:rgba(248,113,113,.07);border:1px solid rgba(248,113,113,.3);
+  }
+  .warn .ico{font-size:20px;line-height:1.4}
+  .warn p{margin:0;color:var(--ink)}
+  .note{
+    margin:22px 0;padding:16px 18px;border-radius:12px;
+    background:var(--orange-soft);border:1px solid rgba(243,159,6,.3);
+  }
+  .note p{margin:0;color:var(--ink)}
+
+  /* TIMELINE */
+  .flow{margin:26px 0;display:grid;gap:0}
+  .flow-item{
+    display:grid;grid-template-columns:56px 1fr;gap:16px;padding:16px 0;
+    border-top:1px dashed var(--line)
+  }
+  .flow-item:last-child{border-bottom:1px dashed var(--line)}
+  .flow-num{
+    font-family:var(--mono);font-size:13px;color:var(--orange);
+    border:1px solid var(--line);border-radius:10px;height:40px;width:56px;
+    display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.02)
+  }
+  .flow-item h4{font-family:var(--disp);font-size:16.5px;font-weight:650;margin-bottom:3px}
+  .flow-item p{margin:0;font-size:15.5px}
+  .decyzja{
+    display:inline-block;margin-left:8px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;
+    color:var(--orange);border:1px solid rgba(243,159,6,.45);border-radius:999px;padding:2px 8px;
+    background:var(--orange-soft);vertical-align:middle;text-transform:uppercase;
+  }
+
+  /* TABELA PRZED/PO */
+  .tabela-wrap{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:12px}
+  table{border-collapse:collapse;width:100%;min-width:560px;font-size:15px}
+  thead th{
+    font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink-dim);text-align:left;padding:12px 16px;border-bottom:1px solid var(--line);
+    background:rgba(255,255,255,.02);font-weight:600;
+  }
+  tbody td{padding:12px 16px;border-top:1px dashed var(--line);color:var(--ink-dim);vertical-align:top}
+  tbody td:first-child{color:var(--ink)}
+  tbody td.stan{font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+
+  /* AKORDEONY */
+  .droga{
+    border:1px solid var(--line);border-radius:14px;background:var(--bg-2);
+    margin:14px 0;overflow:hidden;
+  }
+  .droga.pick{border-color:rgba(243,159,6,.5)}
+  .droga summary{
+    cursor:pointer;list-style:none;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:18px 20px;font-family:var(--disp);font-weight:650;font-size:17.5px;
+    user-select:none;transition:background .15s;
+  }
+  .droga summary::-webkit-details-marker{display:none}
+  .droga summary:hover{background:rgba(255,255,255,.03)}
+  .droga summary::after{
+    content:"+";margin-left:auto;font-family:var(--mono);font-size:20px;color:var(--orange);
+    transition:transform .2s;flex-shrink:0;
+  }
+  .droga[open] summary::after{transform:rotate(45deg)}
+  .droga .d-num{
+    font-family:var(--mono);font-size:12.5px;color:var(--orange);
+    border:1px solid var(--line);border-radius:8px;padding:4px 10px;background:rgba(255,255,255,.02);
+    flex-shrink:0;
+  }
+  .droga .d-body{padding:4px 20px 20px;border-top:1px dashed var(--line)}
+
+  /* HERO ACTIONS */
+  .hero-actions{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:26px}
+  .md-btn{font-size:13px;padding:11px 18px;border-radius:10px}
+  .md-hint{font-size:13.5px;color:var(--ink-dim);max-width:420px}
+
+  /* CTA */
+  .cta-line{
+    margin-top:22px;padding:12px 16px;border:1px dashed rgba(243,159,6,.4);border-radius:12px;
+    font-size:14.5px;color:var(--ink-dim);background:rgba(243,159,6,.05);max-width:640px;
+  }
+  .code-pill{
+    font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--orange);
+    background:rgba(243,159,6,.1);border:1px solid rgba(243,159,6,.35);
+    border-radius:6px;padding:2px 8px;letter-spacing:.06em;
+  }
+  .cta-box{
+    display:flex;align-items:center;justify-content:space-between;gap:26px;flex-wrap:wrap;
+    border:1px solid rgba(243,159,6,.4);border-radius:16px;padding:26px 28px;
+    background:linear-gradient(135deg, rgba(243,159,6,.09), rgba(243,159,6,.02) 60%);
+  }
+  .cta-box p{font-size:15px;max-width:560px}
+  .cta-btn{
+    flex-shrink:0;font-family:var(--disp);font-weight:650;font-size:16px;
+    background:var(--orange);color:#1A192C;border-radius:12px;padding:14px 26px;
+    border-bottom:none;transition:background .15s, transform .08s;
+  }
+  .cta-btn:hover{background:#ffb42a}
+  .cta-btn:active{transform:scale(.97)}
+
+  /* FOOTER */
+  footer{padding:48px 0 64px}
+  footer h2{font-size:clamp(20px,2.6vw,26px);margin-bottom:14px}
+  footer .links{display:flex;flex-wrap:wrap;gap:18px;margin-bottom:22px;font-size:15px}
+  footer p{font-size:13.5px;color:var(--ink-dim)}
+
+  @media (max-width:560px){
+    header{padding:52px 0 34px}
+    section{padding:44px 0}
+    .flow-item{grid-template-columns:44px 1fr;gap:12px}
+    .flow-num{width:44px;height:36px}
+  }
+</style>
+</head>
+<body>
+
+<header id="hero">
+  <div class="wrap">
+    <div class="kicker">Poradnik po odcinku</div>
+    <h1>Zamykam serwer na świat.<br><em>I dalej mam do niego dostęp.</em></h1>
+    <p class="lede">Twój VPS ma dwa rodzaje drzwi. <strong>Od ulicy</strong> - strona, webhooki, bot na
+    80/443 - te muszą być otwarte. I <strong>dla Ciebie</strong> - SSH, panele, bazy - te dziś też stoją
+    od ulicy, a boty z całego świata pukają do nich od pierwszej godziny. <strong>Tailscale</strong>
+    buduje prywatny korytarz z Twojego laptopa i telefonu prosto do serwera. Drzwi od ulicy do zaplecza
+    zamurowujesz.</p>
+    <p class="lede" style="margin-top:14px">Zamiast wykładu o VPN-ach dostajesz <strong>jedną wklejkę
+    do Claude Code</strong>. Agent instaluje Tailscale, każe Ci wejść z komputera i z telefonu,
+    a dopiero potem zamyka publiczne SSH. Ty klikasz dwa linki i mówisz, co ma zostać publiczne.</p>
+    <div class="hero-meta">
+      <span class="chip">⏱ ok. 30 minut</span>
+      <span class="chip">🧑‍💻 zero programowania</span>
+      <span class="chip"><b>7 faz</b> robi agent</span>
+      <span class="chip">🔓 klient open source · konto darmowe</span>
+    </div>
+    <div class="hero-actions">
+      <button class="copy-btn md-btn" data-copy="cb-prompt">📋 Kopiuj prompt dla agenta</button>
+      <span class="md-hint">Nie chcesz czytać? Zjedź do Kroku 2, skopiuj prompt i wklej go w Claude Code.</span>
+    </div>
+    <div class="cta-line">
+      Nie masz jeszcze serwera? Ja korzystam z VPS-ów od <a href="https://hostinger.com/roberthost">Hostingera</a>
+      (partner technologiczny kanału) - kod <span class="code-pill">ROBERTHOST</span> daje dodatkowy rabat.
+    </div>
+  </div>
+</header>
+
+<section id="zanim">
+  <div class="wrap">
+    <div class="step-tag">ZANIM ZACZNIESZ</div>
+    <h2>Czego potrzebujesz</h2>
+    <ul class="plain">
+      <li><strong>VPS z Ubuntu 22.04 / 24.04 i dostęp SSH kluczem.</strong> Może to być serwer, na
+      którym już coś stoi (u mnie: n8n, Shlink, bot Rakazo za Traefikiem). Publiczne usługi na 80/443
+      zostają publiczne - zamykamy tylko zaplecze.</li>
+      <li><strong>Darmowe konto Tailscale.</strong> Logowanie kontem Google, GitHub, Microsoft albo
+      Apple. Plan Personal: <strong>3 użytkowników, 100 urządzeń</strong>, bez karty.</li>
+      <li><strong>Tailscale na Twoim komputerze</strong> (Mac: App Store, Windows/Linux:
+      tailscale.com/download), zalogowany tym samym kontem. Agent sprawdza to w Fazie 0.</li>
+      <li><strong>Telefon z aplikacją Tailscale.</strong> To Twoje drugie urządzenie do testu "wchodzę
+      z LTE". Bez drugiego dowodu wizard <strong>nie zamknie</strong> publicznego SSH - taka jest
+      zasada. Zamiast telefonu może być drugi komputer.</li>
+      <li><strong>Hostinger: token API</strong> (hPanel → API). Firewall Hostingera działa
+      <em>przed</em> serwerem, więc Docker go nie omija. Inny dostawca: agent użyje
+      <code class="inline">ufw</code> na serwerze i powie Ci o pułapce z Dockerem.</li>
+      <li><strong>Claude Code na Twoim komputerze.</strong> Agent działa lokalnie i to on łączy się
+      z serwerem po SSH. Na serwerze instalujemy <strong>tylko Tailscale</strong>.</li>
+    </ul>
+    <div class="warn">
+      <span class="ico">⚠️</span>
+      <p><strong>Złota zasada:</strong> najpierw budujesz nowy most, sprawdzasz, że przenosi ciężar,
+      i dopiero potem rozbierasz stary. Publiczne SSH znika w Fazie 5 <strong>wyłącznie</strong> po
+      dwóch udanych wejściach przez tailnet (komputer + telefon) w Fazie 3. Wizard ma to wbudowane
+      jako bramkę, nie jako sugestię.</p>
+    </div>
+    <div class="note">
+      <p><strong>Krok zero.</strong> Ten poradnik nie robi hardeningu (użytkownik zamiast roota, klucze,
+      fail2ban). Na produkcji przejdź najpierw
+      <a href="https://szewowsky.github.io/vps-security/">vps-security</a> (ok. 9 minut, też jedną
+      wklejką). Na testowej maszynie, jak w odcinku, można od razu - jako root.</p>
+    </div>
+    <div class="note">
+      <p><strong>Ile to kosztuje?</strong> Nic poza serwerem. Klient Tailscale jest open source
+      (<a href="https://github.com/tailscale/tailscale">tailscale/tailscale</a>, BSD-3), konto Personal
+      jest darmowe i użytkownicy z 20 maszynami nie widzieli limitu. Kto nie chce chmury Tailscale, ma
+      Headscale - ale to kolejny serwer do utrzymania.</p>
+    </div>
+  </div>
+</section>
+
+<section id="jak-dziala">
+  <div class="wrap">
+    <div class="step-tag">O CO CHODZI</div>
+    <h2>Trzy rzeczy, które robi Tailscale</h2>
+    <div class="flow">
+      <div class="flow-item">
+        <div class="flow-num">1</div>
+        <div><h4>Tunel (WireGuard)</h4>
+        <p>Opancerzony kabel między dwoma Twoimi urządzeniami. Szyfrowanie na kluczach, jak SSH,
+        tylko na poziomie całej sieci. Każde urządzenie dostaje prywatny adres
+        <code class="inline">100.x.y.z</code>, którego internet nie zna.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">2</div>
+        <div><h4>Recepcja (serwer koordynacyjny)</h4>
+        <p>Swatka. Zna klucze publiczne i aktualne adresy Twoich urządzeń, mówi laptopowi "serwer jest
+        tam". <strong>Nie widzi ruchu</strong> - rozmowa idzie bezpośrednio laptop ↔ serwer.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">3</div>
+        <div><h4>Kurier (DERP)</h4>
+        <p>Gdy tunelu nie da się wykopać bezpośrednio (hotelowy firewall, internet mobilny bez
+        publicznego IP), ruch idzie przez przekaźnik. Nadal zaszyfrowany, tylko wolniej.
+        <code class="inline">tailscale ping</code> powie Ci, którą drogą jedziesz.</p></div>
+      </div>
+    </div>
+    <p>Dlaczego nie trzeba otwierać portów na routerze? Firewall wypuszcza to, co wychodzi, i wpuszcza
+    odpowiedź od tego samego adresata. Obie strony "wychodzą" jednocześnie w to samo miejsce i tunel
+    się zestawia. Dlatego działa nawet za CGNAT operatora komórkowego.</p>
+  </div>
+</section>
+
+<section id="krok-1">
+  <div class="wrap">
+    <div class="step-tag">KROK 1 / 3</div>
+    <h2>Otwórz Claude Code w pustym folderze</h2>
+    <p>Nowy folder, żeby agent miał czyste biurko. Wpisz w terminalu na <strong>swoim komputerze</strong>
+    (nie na serwerze):</p>
+    <div class="codeblock">
+      <div class="codebar"><span>Twój komputer · terminal</span><button class="copy-btn" data-copy="cb1">Kopiuj</button></div>
+      <pre id="cb1">mkdir tailscale-vps && cd tailscale-vps && claude</pre>
+    </div>
+    <div class="note">
+      <p><strong>Pracujesz w aplikacji desktopowej Claude Code?</strong> Terminal nie jest Ci potrzebny:
+      utwórz pusty folder, otwórz go w apce jako nową sesję lokalną i przejdź do Kroku 2.</p>
+    </div>
+  </div>
+</section>
+
+<section id="krok-2">
+  <div class="wrap">
+    <div class="step-tag">KROK 2 / 3</div>
+    <h2>Wklej agentowi ten prompt</h2>
+    <p>Cały, w jednej wiadomości. Agent sklonuje repo z wizardem, zapyta o dane serwera i poprowadzi
+    Cię fazami F0-F6.</p>
+    <div class="codeblock">
+      <div class="codebar"><span>Claude Code · wiadomość do agenta</span><button class="copy-btn" data-copy="cb-prompt">Kopiuj prompt</button></div>
+      <pre id="cb-prompt">Sklonuj repozytorium https://github.com/Szewowsky/tailscale-vps.git do bieżącego katalogu,
+przeczytaj plik .claude/commands/tailscale-setup.md i przeprowadź mnie przez opisany tam wizard
+schowania mojego serwera VPS za prywatną siecią Tailscale - dokładnie według jego zasad
+bezpieczeństwa i kolejności faz od F0 do F6. Idź krok po kroku: czekaj na wynik każdej komendy
+i nie przechodź dalej, jeśli test fazy nie przeszedł. Zacznij od zebrania danych (Faza 0),
+potem audyt PRZED przez scripts/check.sh --before i skan portów z mojego komputera przez
+scripts/portscan.sh, instalacja Tailscale, test dostępu przez tailnet z DWÓCH urządzeń,
+dopiero potem zamknięcie publicznego SSH w firewallu - i na końcu audyt PO oraz zestawienie:
+co było na czerwono, a co jest teraz na zielono. Złota zasada: nie zamykaj starego wejścia,
+dopóki nie udowodnisz, że nowe działa. Komendy z sudo buduj heredokiem zapisywanym do pliku
+i uruchamianym przez ssh, nie wpisuj sudo w komendzie inline. Linki autoryzacji Tailscale
+i kliknięcia w panelu wykonuję sam - Ty mi mówisz, gdzie kliknąć.</pre>
+    </div>
+    <div class="note">
+      <p><strong>Masz Codex zamiast Claude Code?</strong> Ten sam prompt działa - Codex czyta
+      <code class="inline">AGENTS.md</code> z repo, który wskazuje na ten sam wizard.</p>
+    </div>
+  </div>
+</section>
+
+<section id="krok-3">
+  <div class="wrap">
+    <div class="step-tag">KROK 3 / 3</div>
+    <h2>Co się będzie działo (i gdzie masz coś do powiedzenia)</h2>
+    <p>Siedem faz. Agent robi komendy, Ty klikasz tam, gdzie jest znaczek
+    <span class="decyzja">Twój klik</span>.</p>
+    <div class="flow">
+      <div class="flow-item">
+        <div class="flow-num">F0</div>
+        <div><h4>Dane <span class="decyzja">Twój klik</span></h4>
+        <p>IP, użytkownik, port SSH, dostawca (Hostinger / inny), drugie urządzenie, co ma zostać
+        publiczne, nazwa serwera w tailnecie. Agent sprawdza też, czy Twój komputer już jest w tailnecie.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">F1</div>
+        <div><h4>Audyt PRZED + skan portów</h4>
+        <p><code class="inline">check.sh --before</code> na serwerze, <code class="inline">portscan.sh</code>
+        z Twojego komputera. Port SSH świeci na czerwono jako OPEN - to jest "przed". Bonus: liczba prób
+        logowania obcych z ostatniej doby.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">F2</div>
+        <div><h4>Tailscale na serwerze <span class="decyzja">Twój klik</span></h4>
+        <p>Oficjalny <code class="inline">install.sh</code>, potem <code class="inline">tailscale up</code>.
+        Agent wyciąga link autoryzacji, Ty otwierasz go w przeglądarce i klikasz Connect. Serwer dostaje
+        adres <code class="inline">100.x.y.z</code>.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">F3</div>
+        <div><h4>Test nowego mostu z DWÓCH urządzeń <span class="decyzja">Twój klik</span></h4>
+        <p>SSH przez prywatny adres z komputera, potem z telefonu na LTE (aplikacja SSH albo strona
+        testowa, która słucha tylko na adresie Tailscale). Dwa dowody = bramka do Fazy 5 otwarta.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">F4</div>
+        <div><h4>Key expiry OFF <span class="decyzja">Twój klik</span></h4>
+        <p>Klucz urządzenia domyślnie wygasa po 180 dniach - serwer wypadłby z sieci w środku nocy.
+        Konsola → Machines → Disable key expiry. Opcjonalnie Tailscale SSH: logowanie bez kluczy.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">F5</div>
+        <div><h4>Zamknięcie publicznego SSH <span class="decyzja">Twój klik</span></h4>
+        <p>Bramka: dwa dowody z F3, key expiry off, Twój plan B (gdzie wyłączysz firewall z telefonu),
+        lista publicznych portów. Hostinger: skrypt tworzy grupę w firewallu panelu przez API
+        (token eksportujesz sam, nie wklejasz do czatu). Inni: ufw. Potem skan: SSH closed, a Ty dalej
+        wchodzisz przez tailnet.</p></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-num">F6</div>
+        <div><h4>Audyt PO + zestawienie</h4>
+        <p>Tabela przed/po. Port SSH nie istnieje dla internetu, wejście z komputera i telefonu działa,
+        klucz nie wygasa, 80/443 dalej publiczne, jeśli tak chciałeś.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="werdykt">
+  <div class="wrap">
+    <div class="step-tag">CZERWONE MA BYĆ ZIELONE</div>
+    <h2>Skan z internetu przed i po</h2>
+    <p>To jest cały film w dwóch wynikach. Skan robisz <strong>ze swojego komputera</strong>, bo tylko
+    tak widzisz to, co widzi internet - audyt na serwerze nie zobaczy firewalla dostawcy.</p>
+    <div class="codeblock term">
+      <div class="codebar"><span>PRZED · bash portscan.sh 31.97.47.125</span></div>
+      <pre><span class="t-fail">  OPEN  </span> 22
+<span class="t-pass">  closed</span> 2222
+<span class="t-pass">  closed</span> 80
+<span class="t-pass">  closed</span> 443
+<span class="t-pass">  closed</span> 8080
+<span class="t-dim">  ...</span>
+Otwarte z internetu: <span class="t-fail">1</span></pre>
+    </div>
+    <div class="codeblock term">
+      <div class="codebar"><span>PO · bash portscan.sh 31.97.47.125</span></div>
+      <pre><span class="t-pass">  closed</span> 22
+<span class="t-pass">  closed</span> 2222
+<span class="t-pass">  closed</span> 80
+<span class="t-pass">  closed</span> 443
+<span class="t-pass">  closed</span> 8080
+<span class="t-dim">  ...</span>
+<span class="t-pass">Z internetu nie widać żadnego z tych portów.</span>
+<span class="t-dim">$ ssh root@100.103.126.35 "echo STILL_IN_VIA_TAILNET"</span>
+<span class="t-pass">STILL_IN_VIA_TAILNET</span></pre>
+    </div>
+    <div class="tabela-wrap">
+      <table>
+        <thead><tr><th>Co</th><th>Przed</th><th>Po</th></tr></thead>
+        <tbody>
+          <tr><td>Port SSH z internetu</td><td class="stan t-fail">OPEN</td><td class="stan t-pass">closed</td></tr>
+          <tr><td>Wejście z komputera</td><td class="stan">ssh user@IP</td><td class="stan">ssh user@100.x.y.z</td></tr>
+          <tr><td>Wejście z telefonu</td><td class="stan t-warn">klucze na telefonie</td><td class="stan t-pass">aplikacja + 100.x</td></tr>
+          <tr><td>Publiczne WWW / webhooki (80/443)</td><td class="stan">działa</td><td class="stan t-pass">działa</td></tr>
+          <tr><td>Klucz urządzenia serwera</td><td class="stan t-warn">wygasa po 180 dniach</td><td class="stan t-pass">nie wygasa</td></tr>
+          <tr><td>Prób logowania obcych / dobę</td><td class="stan t-fail">setki</td><td class="stan t-pass">0</td></tr>
+          <tr><td>Zgubiony laptop</td><td class="stan t-warn">wymiana kluczy na serwerach</td><td class="stan t-pass">Remove w panelu</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="potkniecia">
+  <div class="wrap">
+    <div class="step-tag">ZJEDZONE ZA CIEBIE</div>
+    <h2>Pułapki, które wizard już zna</h2>
+
+    <details class="droga pick">
+      <summary><span class="d-num">1</span>Docker omija ufw</summary>
+      <div class="d-body">
+        <p>Kontener z <code class="inline">-p 8080:8080</code> publikuje port przez iptables
+        <em>przed</em> ufw i jest widoczny z internetu mimo <code class="inline">deny</code>. Dlatego na
+        Hostingerze wizard używa firewalla w panelu (działa przed serwerem). Przy ufw: porty wewnętrzne
+        bindujesz na adres Tailscale - <code class="inline">"100.x.y.z:8080:8080"</code> zamiast
+        <code class="inline">"8080:8080"</code>.</p>
+      </div>
+    </details>
+
+    <details class="droga">
+      <summary><span class="d-num">2</span>Konsola web Hostingera nie jest planem B</summary>
+      <div class="d-body">
+        <p>Konsola (noVNC) loguje jako root. Po vps-security root ma zablokowane logowanie, więc konsola
+        nie wejdzie. Planem B jest <strong>przełącznik firewalla w panelu</strong> - działa z telefonu.
+        Wizard pyta o Twój plan B, zanim cokolwiek zamknie.</p>
+      </div>
+    </details>
+
+    <details class="droga">
+      <summary><span class="d-num">3</span>Po kilku miesiącach serwer znika z tailnetu</summary>
+      <div class="d-body">
+        <p>Key expiry. Laptop odnawia klucz przy logowaniu, serwer nie. Faza 4 wyłącza to w konsoli,
+        a <code class="inline">check.sh</code> świeci na czerwono, dopóki nie wyłączysz. Jeśli już
+        wpadłeś: plan B, <code class="inline">sudo tailscale up --force-reauth</code>, klik, tym razem
+        Disable key expiry.</p>
+      </div>
+    </details>
+
+    <details class="droga">
+      <summary><span class="d-num">4</span><code class="inline">tailscale ping</code> mówi via DERP i nie przechodzi w direct</summary>
+      <div class="d-body">
+        <p>UDP 41641 zablokowane po drodze. Działa, tylko przez przekaźnik. Wizard zostawia accept
+        UDP 41641 w firewallu właśnie po to. Sprawdź regułę, odczekaj minutę, pinguj ponownie.</p>
+      </div>
+    </details>
+
+    <details class="droga">
+      <summary><span class="d-num">5</span>"Tailscale nie jest open source, widzi mój ruch"</summary>
+      <div class="d-body">
+        <p>Klient jest open source. Serwer koordynacyjny (chmura Tailscale) zna klucze publiczne, adresy
+        i nazwy urządzeń - kojarzy pary. Sam ruch idzie bezpośrednio między Twoimi urządzeniami,
+        zaszyfrowany WireGuardem; przez ich przekaźnik przechodzi tylko w trybie DERP i nadal
+        zaszyfrowany. Kto chce mieć wszystko u siebie: Headscale. Kolejny serwer do utrzymania.</p>
+      </div>
+    </details>
+
+    <details class="droga">
+      <summary><span class="d-num">6</span>"Przecież WireGuard to pięć linijek"</summary>
+      <div class="d-body">
+        <p>Dla admina pięć linijek, dla mnie pięć wieczorów. Tailscale robi za Ciebie wymianę kluczy,
+        przebijanie NAT, przekaźnik, nazwy zamiast adresów i unieważnianie urządzeń. Jeśli lubisz
+        konfigurować WireGuard ręcznie - ten poradnik nie jest dla Ciebie i to jest OK.</p>
+      </div>
+    </details>
+
+    <details class="droga">
+      <summary><span class="d-num">7</span>Agent mówi "BLOCKED: sudo is not allowed"</summary>
+      <div class="d-body">
+        <p>Bash-guard w Claude Code blokuje <code class="inline">sudo</code> i
+        <code class="inline">curl | sh</code> w komendzie inline, nawet zdalnej. Wizard buduje takie kroki
+        heredokiem do pliku, kopiuje przez scp i uruchamia na serwerze. Jeśli agent mimo to utknie, prompt
+        z Kroku 2 mu to przypomina.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<section id="cta" style="border-bottom:0">
+  <div class="wrap">
+    <div class="cta-box">
+      <div>
+        <h3 style="margin-top:0">Nie masz jeszcze VPS-a?</h3>
+        <p style="margin-bottom:0">Cały ten poradnik zaczyna się od serwera. Ja swoje trzymam u Hostingera -
+        to partner technologiczny kanału, więc z kodem <span class="code-pill">ROBERTHOST</span> dostajesz
+        dodatkowy rabat, a ja małą prowizję. Sprzęt bez zmian, cena niższa.</p>
+      </div>
+      <a class="cta-btn" href="https://hostinger.com/roberthost">Postaw serwer →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <h2>Materiały i licencje</h2>
+    <div class="links">
+      <a href="https://youtube.com/@robert_szewczyk">Odcinek na YouTube</a>
+      <a href="https://github.com/Szewowsky/tailscale-vps">Repo: wizard + skrypty</a>
+      <a href="https://szewowsky.github.io/vps-security/">Krok zero: zabezpiecz VPS</a>
+      <a href="https://szewowsky.github.io/rakazo-vps/">Poprzedni odcinek: Rakazo na VPS</a>
+      <a href="https://tailscale.com/kb">Dokumentacja Tailscale</a>
+    </div>
+    <p>Materiał towarzyszący do odcinka o zamykaniu serwera VPS za prywatną siecią Tailscale.
+    Wizard i skrypty z tego repozytorium są na licencji MIT - skrypty audytu i skanu tylko czytają,
+    można je odpalać wielokrotnie bez szkody. Tailscale to osobny produkt firmy Tailscale Inc.
+    (klient na licencji BSD-3) - ten poradnik nie jest z nim powiązany ani przez niego firmowany.
+    Testuj na świeżym serwerze, zanim użyjesz na produkcji.</p>
+  </div>
+</footer>
+
+<script>
+  function fallbackCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = false;
+    try { ok = document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+    return ok;
+  }
+  document.querySelectorAll('.copy-btn').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var el = document.getElementById(btn.dataset.copy);
+      if (!el) return;
+      var text = el.innerText;
+      var mark = function(ok){
+        var old = btn.textContent;
+        btn.textContent = ok ? 'Skopiowane ✓' : 'Zaznacz i skopiuj ręcznie';
+        if (ok) btn.classList.add('done');
+        setTimeout(function(){ btn.textContent = old; btn.classList.remove('done'); }, 1800);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function(){ mark(true); },
+          function(){ mark(fallbackCopy(text)); });
+      } else {
+        mark(fallbackCopy(text));
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
