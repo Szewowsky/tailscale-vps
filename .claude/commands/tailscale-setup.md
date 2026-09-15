@@ -158,6 +158,14 @@ bash ./scripts/portscan.sh IP
 Oczekiwany wynik: port SSH (PORT) **OPEN**, ewentualnie 80/443 jeśli jest WWW. Zapisz wynik
 w czacie - w Fazie 6 pokażesz go obok wyniku "PO".
 
+Jeśli użytkownik ma `nmap`, ładniejsze ujęcie: `nmap -Pn -p 22,80,443,PORT IP` (kilka sekund). Pełny
+`nmap -Pn IP` (1000 portów) trwa ok. 50 s przed zamknięciem i **ok. 7 minut po** - serwer, który nie
+odpowiada, wymusza timeout na każdym porcie. To dobra ciekawostka, ale nie każ użytkownikowi czekać.
+
+**Nie interpretuj `closed/filtered` na innych portach jako "serwer już coś filtruje".** Bez firewalla
+serwer odsyła RST, który często ginie po drodze (sieć hostingu / domowa), więc z zewnątrz wygląda to
+jak filtrowanie. Liczy się tylko to, co jest OPEN.
+
 Opcjonalnie, żeby uświadomić skalę: ile prób logowania obcych było w ostatniej dobie:
 
 ```bash
@@ -206,7 +214,12 @@ cat > /tmp/f2b.sh <<'EOS'
 #!/usr/bin/env bash
 set -euo pipefail
 nohup sudo tailscale up --hostname NAZWA > /tmp/ts-up.log 2>&1 &
-sleep 6
+# link autoryzacji pojawia się dopiero po ok. 20 s (serwer rejestruje się u koordynatora) - czekamy do 45 s
+for i in $(seq 1 45); do
+  grep -q "login.tailscale.com" /tmp/ts-up.log 2>/dev/null && break
+  grep -q "Success" /tmp/ts-up.log 2>/dev/null && break
+  sleep 1
+done
 cat /tmp/ts-up.log
 EOS
 scp -P PORT /tmp/f2b.sh USER@IP:/tmp/f2b.sh
@@ -244,7 +257,9 @@ Oczekiwany wynik: na liście pojawia się `NAZWA` z tym samym adresem `100.x.y.z
 w `TS status` na komputerze.
 
 **FAIL - co zrobić:**
-- w logu brak linku, jest `Logged in` → serwer był już w tailnecie (ponowny przebieg). OK, idź dalej.
+- log pusty po 45 s → to nie błąd, `tailscale up` potrafi milczeć 20-30 s zanim wypisze link. Nie przerywaj
+  procesu. Odczekaj i `ssh -p PORT USER@IP "cat /tmp/ts-up.log"`.
+- w logu brak linku, jest `Logged in` / `Success` → serwer był już w tailnecie (ponowny przebieg). OK, idź dalej.
 - link jest, ale po 2 minutach `tailscale status` mówi `Logged out` / `NeedsLogin` → użytkownik nie
   kliknął albo zalogował się innym kontem. Zapytaj. Link można wygenerować ponownie tym samym skryptem.
 - `tailscale status` na komputerze nie widzi serwera, choć serwer widzi siebie → inne konto Tailscale
@@ -339,7 +354,10 @@ Działa obok zwykłego sshd (`sshd_config` i `authorized_keys` nie są ruszane).
 zmienionych ACL jest domyślna reguła: każdy członek może wejść na swoje własne urządzenia, w trybie
 `check` (co jakiś czas przeglądarka poprosi o potwierdzenie tożsamości).
 
-Zapytaj użytkownika, czy chce. Jeśli tak:
+Zapytaj użytkownika, czy chce. Jeśli tak - uruchom przez **publiczne IP** (jeszcze otwarte), nie przez
+`TS_IP`: włączenie Tailscale SSH przejmuje port 22 na adresie tailnetu i może zerwać sesję po `TS_IP`.
+`tailscale set --ssh` zamiast `tailscale up --ssh`: `up` przy zmianie flag żąda powtórzenia wszystkich
+wcześniejszych, `set` zmienia tylko jedną.
 
 ```bash
 cat > /tmp/f4b.sh <<'EOS'
@@ -361,6 +379,10 @@ ssh -o ConnectTimeout=10 USER@TS_IP "echo TS_SSH_LOGIN_OK"
 
 Przy pierwszym połączeniu może pojawić się link do potwierdzenia w przeglądarce (tryb `check`) -
 użytkownik klika. Oczekiwany wynik: `TS_SSH_LOGIN_OK` bez pytania o hasło.
+
+Z telefonu (Termius/Blink): host `TS_IP`, port 22, user `USER`, **pole klucza i hasła puste** - loguje
+tożsamość z tailnetu. Log na serwerze pokazuje wtedy KTO wszedł, nie tylko skąd:
+`journalctl -u tailscaled | grep "SSH login"` → `ts_user=... node=iphone...`.
 
 **Test zaliczenia:** `TS_SSH_LOGIN_OK`.
 
@@ -434,6 +456,11 @@ Wycofanie (plan B z terminala, jeśli użytkownik nadal ma tailnet):
 ```bash
 python3 ./scripts/hostinger-firewall.py off --vm VM_ID FIREWALL_ID
 ```
+
+Firewall Hostingera filtruje **IPv4 i IPv6** (sshd słucha też na `[::]:22`, sprawdzone: 22 po IPv6
+zamknięte). Reguły wchodzą w życie w **poniżej minuty** (dokumentacja: "two minutes or less"); po
+`setup` odczekaj 60 s zanim skanujesz. Firewall jest stateful: serwer dalej ma internet (apt, HTTPS
+wychodzące), a `sshd` na serwerze dalej pokazuje LISTEN - blokada stoi przed serwerem, nie na nim.
 
 **Uwaga:** konsola web w hPanel (noVNC) loguje jako root; na serwerze po vps-security root ma
 zablokowane logowanie, więc konsola **nie** jest planem B. Planem B jest przełącznik firewalla w panelu.
@@ -516,6 +543,10 @@ Pokaż użytkownikowi zestawienie:
 | Wejście z telefonu | brak / klucze na telefonie | aplikacja Tailscale + `TS_IP` |
 | Klucz urządzenia serwera | wygasa po 180 dniach | nie wygasa |
 | Prób logowania obcych / dobę | (liczba z 1c) | 0 (port nie istnieje) |
+
+Jeśli użytkownik ma alias w `~/.ssh/config` wskazujący na publiczne IP serwera - przestał działać.
+Zaproponuj podmianę `HostName` na `TS_IP` albo na `NAZWA` (MagicDNS; przeżyje zmianę adresu 100.x
+po reinstalacji). Nie edytuj `~/.ssh/config` bez zgody - pokaż linię do zmiany.
 
 Podsumowanie na koniec:
 

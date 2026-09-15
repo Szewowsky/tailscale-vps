@@ -57,7 +57,10 @@ Skan portów **z Twojego komputera** (to widzi internet):
 bash ./scripts/portscan.sh TWOJE_IP
 ```
 
-Zapisz sobie wynik. Port SSH będzie `OPEN`. Do tego wrócisz na końcu.
+Zapisz sobie wynik. Port SSH będzie `OPEN`. Do tego wrócisz na końcu. Masz `nmap`? Ładniej:
+`nmap -Pn -p 22,80,443 TWOJE_IP`. Pełny `nmap -Pn TWOJE_IP` trwa ok. 50 s teraz i ok. 7 minut po
+zamknięciu - serwer, który nie odpowiada, marnuje czas skanera. Inne porty jako `filtered` to nie
+firewall serwera, tylko zgubione po drodze odpowiedzi - liczy się to, co OPEN.
 
 Ciekawostka: ile prób logowania obcych było w ostatniej dobie?
 
@@ -102,9 +105,10 @@ sudo systemctl enable --now tailscaled
 sudo tailscale up --hostname NAZWA
 ```
 
-`NAZWA` to nazwa serwera w tailnecie, np. `vps-boty` (małe litery, bez spacji). Komenda wypisze link
+`NAZWA` to nazwa serwera w tailnecie, np. `vps-boty` (małe litery, bez spacji). Komenda przez
+**ok. 20 sekund nic nie wypisuje** (wygląda na zawieszoną, nie przerywaj), potem pokazuje link
 `https://login.tailscale.com/a/...` - otwórz go w przeglądarce na komputerze, zaloguj się tym samym
-kontem, kliknij **Connect**. Terminal odblokuje się sam.
+kontem, kliknij **Connect**. Terminal odblokuje się sam po kilkunastu sekundach.
 
 Sprawdź adres serwera w tailnecie i zapisz go (dalej: `TS_IP`):
 
@@ -161,11 +165,15 @@ tailscale status --json | grep KeyExpiry
 
 Brak linii albo `"KeyExpiry": null` = wyłączone. Data = nadal włączone.
 
-**Opcjonalnie - Tailscale SSH** (logowanie bez kluczy, tożsamość daje tailnet; zwykły sshd zostaje):
+**Opcjonalnie - Tailscale SSH** (logowanie bez kluczy, tożsamość daje tailnet; zwykły sshd zostaje).
+Uruchom w sesji po **publicznym IP**, bo przełączenie może zerwać sesję po adresie Tailscale:
 
 ```
 sudo tailscale set --ssh
 ```
+
+Z telefonu (Termius): host `TS_IP`, port 22, pole klucza i hasła puste. Na serwerze
+`journalctl -u tailscaled | grep "SSH login"` pokazuje, KTO wszedł (konto + urządzenie), nie tylko skąd.
 
 Z komputera: `ssh twoj_user@TS_IP` (port 22, niezależnie od portu sshd). Przy pierwszym wejściu może
 poprosić o potwierdzenie w przeglądarce.
@@ -201,6 +209,9 @@ python3 ./scripts/hostinger-firewall.py setup --vm ID_SERWERA
 Z publicznym WWW na 80/443 dodaj `--web`. Skrypt tworzy grupę `tailscale-lockdown-ID`, wpuszcza
 UDP 41641 (+ 80/443), aktywuje ją na serwerze i wypisuje `FIREWALL_ID`. Wszystko inne (w tym SSH)
 jest odrzucane.
+
+Reguły wchodzą w życie w poniżej minuty; firewall filtruje IPv4 i IPv6, ruch wychodzący serwera
+(apt, HTTPS) działa dalej.
 
 To samo ręcznie w hPanel: VPS → Firewall → Create → reguły accept UDP 41641 (+ TCP 80, 443) →
 Activate na serwerze.
