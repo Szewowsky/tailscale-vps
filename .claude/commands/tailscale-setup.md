@@ -478,13 +478,15 @@ konsola **https://login.tailscale.com/admin/acls** (edytor JSON) → sekcja `"ss
 Test po kilkunastu sekundach (nowa polityka musi dojść do serwera):
 
 ```bash
-ssh -o BatchMode=yes -o ConnectTimeout=10 root@TS_IP 'id'                      # ma być ODMOWA
-ssh -o ConnectTimeout=10 USER@TS_IP "echo TS_SSH_LOGIN_OK"                      # ma dalej wchodzić
+ssh -o BatchMode=yes -o ConnectTimeout=10 root@TS_IP 'id' 2>&1; echo "EXIT=$?"   # ma być ODMOWA
+ssh -o ConnectTimeout=10 USER@TS_IP "echo TS_SSH_LOGIN_OK"                        # ma dalej wchodzić
 ```
 
-Oczekiwany wynik: pierwsza komenda kończy się błędem z tekstem
-`tailnet policy does not permit you to SSH as user "root"` (albo `access denied`) i **bez** `uid=0`;
-druga wypisuje `TS_SSH_LOGIN_OK`. Pierwsza pokazuje `uid=0(root)` → polityka jeszcze nie doszła
+Oczekiwany wynik: pierwsza komenda **bez** `uid=0` i z `EXIT=255` (dowolny kod różny od 0 to odmowa).
+Na stderr zwykle `tailscale: tailnet policy does not permit you to SSH as user "root"` i
+`Connection closed by TS_IP port 22` - bez `2>&1` widać tylko pusty wynik, dlatego zaliczenie opiera się
+na kodzie wyjścia, nie na tekście. Druga wypisuje `TS_SSH_LOGIN_OK`. Pierwsza pokazuje `uid=0(root)`
+i `EXIT=0` → polityka jeszcze nie doszła
 (odczekaj 30 s i powtórz) albo ACL nie zapisano. Pierwsza wyświetla link do potwierdzenia i czeka →
 root nadal jest dozwolony (tryb `check`): przerwij i sprawdź ACL. `check.sh` pokazuje to samo w sekcji
 Tailscale (WARN "Tailscale SSH wpuszcza roota" / PASS "nie wpuszcza roota").

@@ -183,7 +183,8 @@ sudo tailscale set --ssh
 obejmuje - domyślna reguła tailnetu wpuszcza też `ssh root@TS_IP`. Reguła ACL to jedyne miejsce, gdzie
 się to wyłącza: https://login.tailscale.com/admin/acls → sekcja `"ssh"` → `"users": ["autogroup:nonroot"]`
 (bez `"root"`) → Save. Sprawdź po chwili: `ssh -o BatchMode=yes root@TS_IP id` ma być odrzucone
-(`tailnet policy does not permit you to SSH as user "root"`), a `ssh twoj_user@TS_IP` nadal wchodzi.
+(zamiast `uid=0` błąd połączenia, zwykle `tailnet policy does not permit you to SSH as user "root"`),
+a `ssh twoj_user@TS_IP` nadal wchodzi.
 
 Z telefonu (Termius): host `TS_IP`, port 22, pole klucza i hasła puste. Na serwerze
 `journalctl -u tailscaled | grep "SSH login"` pokazuje, KTO wszedł (konto + urządzenie), nie tylko skąd.
