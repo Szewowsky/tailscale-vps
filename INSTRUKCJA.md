@@ -65,8 +65,11 @@ firewall serwera, tylko zgubione po drodze odpowiedzi - liczy się to, co OPEN.
 Ciekawostka: ile prób logowania obcych było w ostatniej dobie?
 
 ```
-ssh twoj_user@TWOJE_IP "journalctl -u ssh --since '24 hours ago' | grep -c -E 'Failed password|Invalid user'"
+ssh -t twoj_user@TWOJE_IP "sudo journalctl -u ssh --since '24 hours ago' | grep -c -E 'Failed password|Invalid user|Connection closed by authenticating user'"
 ```
+
+Bez `sudo` zwykły użytkownik nie widzi logów sshd i dostaje `0`. Wynik obejmuje też Twoje własne
+nieudane próby (np. z hardeningu).
 
 ---
 

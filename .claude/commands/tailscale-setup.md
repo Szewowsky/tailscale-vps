@@ -26,8 +26,8 @@ ssh -p PORT USER@IP "bash /tmp/fX.sh; rm -f /tmp/fX.sh"
 ```
 
 `sudo` i `curl ... | sh` wewnątrz **heredoca** zapisywanego do pliku przechodzą. W komendzie inline,
-w `printf` i w `ssh USER@IP "sudo ..."` są **blokowane**. Dlatego każdy krok z `sudo` (F1a, F2a, F2b,
-F4b, F5b) buduj heredokiem `cat > /tmp/xxx.sh <<'EOS' ... EOS`.
+w `printf` i w `ssh USER@IP "sudo ..."` są **blokowane**. Dlatego każdy krok z `sudo` (F1a, F1c, F2a,
+F2b, F4b, F5c) buduj heredokiem `cat > /tmp/xxx.sh <<'EOS' ... EOS`.
 
 Jeśli użytkownik jest `root` (świeży serwer bez vps-security), `sudo` w skryptach jest zbędne, ale
 nie szkodzi - `sudo` jako root po prostu działa. Nie przepisuj skryptów.
@@ -166,13 +166,26 @@ odpowiada, wymusza timeout na każdym porcie. To dobra ciekawostka, ale nie każ
 serwer odsyła RST, który często ginie po drodze (sieć hostingu / domowa), więc z zewnątrz wygląda to
 jak filtrowanie. Liczy się tylko to, co jest OPEN.
 
-Opcjonalnie, żeby uświadomić skalę: ile prób logowania obcych było w ostatniej dobie:
+Opcjonalnie, żeby uświadomić skalę: ile prób logowania było w ostatniej dobie i skąd. `journalctl`
+idzie **przez sudo**: użytkownik nie-root (spoza grup `adm` / `systemd-journal`) bez sudo nie widzi
+logów sshd i dostaje fałszywe `0`. Stąd heredoc:
 
 ```bash
-ssh -p PORT USER@IP "journalctl -u ssh --since '24 hours ago' 2>/dev/null | grep -c -E 'Failed password|Invalid user|Connection closed by authenticating user' || true"
+cat > /tmp/f1c.sh <<'EOS'
+#!/usr/bin/env bash
+L=$(sudo journalctl -u ssh --since '24 hours ago' 2>/dev/null | grep -E 'Failed password|Invalid user|Connection closed by authenticating user' || true)
+echo "PROBY_24H=$(printf '%s' "$L" | grep -c . || true)"
+echo "Adresy (liczba prób, IP):"
+printf '%s\n' "$L" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | sort | uniq -c | sort -rn | head -5
+EOS
+scp -P PORT /tmp/f1c.sh USER@IP:/tmp/f1c.sh
+ssh -p PORT USER@IP "bash /tmp/f1c.sh; rm -f /tmp/f1c.sh"
 ```
 
-Na świeżym serwerze po 3 godzinach potrafi być 5, po tygodniu setki. Powiedz użytkownikowi liczbę.
+Oczekiwany wynik: `PROBY_24H=N` i lista adresów. Odejmij próby z IP komputera użytkownika
+(`curl -4 -s https://ifconfig.me` u niego) - jego testy z hardeningu też tu trafiają. Reszta to obcy.
+Na serwerze z adresem, który długo wisi w sieci, po 3 godzinach potrafi być kilka, po tygodniu setki;
+świeżo przydzielony adres bywa czysty (0). Powiedz użytkownikowi liczbę obcych.
 
 ---
 
