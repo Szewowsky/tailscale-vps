@@ -155,6 +155,26 @@ if command -v tailscale >/dev/null 2>&1; then
 
         if tailscale debug prefs 2>/dev/null | grep -q '"RunSSH": true'; then
             info "Tailscale SSH włączone (logowanie bez kluczy po adresie 100.x, port 22)"
+            # Tailscale SSH nie czyta sshd_config (PermitRootLogin). O roocie decyduje tylko reguła "ssh"
+            # w ACL tailnetu; serwer dostaje ją jako sshUsers (żądany user -> lokalny, "*" = reszta, "=" = ten sam).
+            ROOT_SSH="?"
+            if [[ $HAVE_ROOT -eq 1 ]]; then
+                ROOT_SSH=$($SUDO tailscale debug netmap 2>/dev/null | python3 -c '
+import json, sys
+try:
+    rules = (json.load(sys.stdin).get("SSHPolicy") or {}).get("rules") or []
+except Exception:
+    print("?"); sys.exit()
+def to_root(u):
+    return any(v == "root" for v in u.values()) or ("root" not in u and u.get("*") == "=")
+print("tak" if any(to_root(r.get("sshUsers") or {}) and not (r.get("action") or {}).get("reject") for r in rules) else "nie")
+' 2>/dev/null || echo "?")
+            fi
+            case "$ROOT_SSH" in
+                tak) warn "Tailscale SSH wpuszcza roota (ssh root@${TS_IP:-TS_IP}) - PermitRootLogin z sshd_config go nie dotyczy. Wyłączysz to tylko w ACL tailnetu: login.tailscale.com/admin/acls -> sekcja ssh -> \"users\": [\"autogroup:nonroot\"]" ;;
+                nie) pass "Tailscale SSH nie wpuszcza roota (reguła ssh w ACL bez \"root\")" ;;
+                *)   info "Nie mogę odczytać reguł Tailscale SSH - sprawdź ręcznie: ssh -o BatchMode=yes root@${TS_IP:-TS_IP} id ma być odrzucone" ;;
+            esac
         else
             info "Tailscale SSH wyłączone (opcjonalne: sudo tailscale set --ssh)"
         fi

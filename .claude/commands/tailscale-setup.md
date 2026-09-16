@@ -429,7 +429,15 @@ Mieszanka `None` i daty → poproś użytkownika, żeby otworzył menu `...` prz
 Tailscale SSH: logowanie na serwer **bez kluczy SSH i bez hasła** - tożsamość daje sam tailnet.
 Działa obok zwykłego sshd (`sshd_config` i `authorized_keys` nie są ruszane). Na tailnecie bez
 zmienionych ACL jest domyślna reguła: każdy członek może wejść na swoje własne urządzenia, w trybie
-`check` (co jakiś czas przeglądarka poprosi o potwierdzenie tożsamości).
+`check` (co jakiś czas przeglądarka poprosi o potwierdzenie tożsamości), jako dowolny użytkownik -
+**także root**.
+
+**Ostrzeżenie (powiedz to użytkownikowi, zanim włączy): Tailscale SSH nie czyta `sshd_config`**, więc
+`PermitRootLogin no` z vps-security go nie obejmuje. Domyślna reguła `ssh` w ACL tailnetu ma
+`"users": ["autogroup:nonroot", "root"]` - po `tailscale set --ssh` działa `ssh root@TS_IP` (sprawdzone:
+w logu serwera `SSH login: user=root uid=0`). Z internetu nic się nie zmienia (port zamyka Faza 5), ale
+obietnica "root nie wchodzi" z hardeningu przestaje być prawdziwa. Wyłącza się to **wyłącznie w ACL**
+tailnetu - krok niżej, klik użytkownika.
 
 Zapytaj użytkownika, czy chce. Jeśli tak - uruchom przez **publiczne IP** (jeszcze otwarte), nie przez
 `TS_IP`: włączenie Tailscale SSH przejmuje port 22 na adresie tailnetu i może zerwać sesję po `TS_IP`.
@@ -462,12 +470,32 @@ Z telefonu (Termius/Blink): host `TS_IP`, port 22, user `USER`, **pole klucza i 
 tożsamość z tailnetu. Log na serwerze pokazuje wtedy KTO wszedł, nie tylko skąd:
 `journalctl -u tailscaled | grep "SSH login"` → `ts_user=... node=iphone...`.
 
-**Test zaliczenia:** `TS_SSH_LOGIN_OK`.
+**Root poza Tailscale SSH (klik użytkownika, nie edytuj ACL za niego):**
+konsola **https://login.tailscale.com/admin/acls** (edytor JSON) → sekcja `"ssh"` → w regule z
+`"action": "check"` zmień `"users": ["autogroup:nonroot", "root"]` na `"users": ["autogroup:nonroot"]`
+→ **Save**. `autogroup:nonroot` = każdy lokalny użytkownik poza rootem, więc `USER` wchodzi dalej.
 
-**FAIL - co zrobić:** `Permission denied` → ACL tailnetu zmienione i nie ma reguły `ssh`. Pokaż
-użytkownikowi https://login.tailscale.com/admin/acls i domyślną regułę z dokumentacji
-(`"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"]`). Nie edytuj ACL za niego.
-Zwykłe SSH kluczem przez `TS_IP:PORT` działa dalej - to nie blokuje wizarda.
+Test po kilkunastu sekundach (nowa polityka musi dojść do serwera):
+
+```bash
+ssh -o BatchMode=yes -o ConnectTimeout=10 root@TS_IP 'id'                      # ma być ODMOWA
+ssh -o ConnectTimeout=10 USER@TS_IP "echo TS_SSH_LOGIN_OK"                      # ma dalej wchodzić
+```
+
+Oczekiwany wynik: pierwsza komenda kończy się błędem z tekstem
+`tailnet policy does not permit you to SSH as user "root"` (albo `access denied`) i **bez** `uid=0`;
+druga wypisuje `TS_SSH_LOGIN_OK`. Pierwsza pokazuje `uid=0(root)` → polityka jeszcze nie doszła
+(odczekaj 30 s i powtórz) albo ACL nie zapisano. Pierwsza wyświetla link do potwierdzenia i czeka →
+root nadal jest dozwolony (tryb `check`): przerwij i sprawdź ACL. `check.sh` pokazuje to samo w sekcji
+Tailscale (WARN "Tailscale SSH wpuszcza roota" / PASS "nie wpuszcza roota").
+
+**Test zaliczenia:** `TS_SSH_LOGIN_OK` **i** odmowa dla `root@TS_IP`.
+
+**FAIL - co zrobić:** `Permission denied` / `access denied` dla `USER` → ACL tailnetu zmienione i nie ma
+reguły `ssh` dla tego użytkownika. Pokaż użytkownikowi https://login.tailscale.com/admin/acls i regułę
+(`"action": "check", "src": ["autogroup:member"], "dst": ["autogroup:self"], "users": ["autogroup:nonroot"]`).
+Nie edytuj ACL za niego. Zwykłe SSH kluczem przez `TS_IP:PORT` działa dalej - to nie blokuje wizarda.
+Użytkownik nie chce zmieniać ACL → zapisz w podsumowaniu wprost "root wchodzi przez Tailscale SSH".
 
 ---
 
@@ -639,6 +667,8 @@ ssh -p PORT USER@TS_IP "bash /tmp/check.sh 2>&1 | tee /tmp/tailscale-check-after
 Bez `--before`. Tailscale, tailnet i key expiry mają być na zielono. `check.sh` działa na serwerze,
 więc **nie widzi** firewalla Hostingera - dowodem zamknięcia jest skan z 5d, nie audyt. W ścieżce
 Hostinger jeden WARN jest oczekiwany: `ufw przepuszcza port SSH ...` (reguła zostaje dla planu B, 5b).
+WARN `Tailscale SSH wpuszcza roota` oczekiwany nie jest - wróć do 4b (krok ACL); reguła `ssh` w ACL
+tailnetu to jedyne miejsce, gdzie się to wyłącza.
 
 Pokaż użytkownikowi zestawienie:
 
@@ -661,7 +691,7 @@ Podsumowanie na koniec:
 - Publicznie otwarte: UDP 41641 [+ TCP 80/443]
 - Plan B: [odpowiedź użytkownika z 5a]
 - Firewall: Hostinger grupa `FIREWALL_ID` / ufw
-- Tailscale SSH: włączone / nie
+- Tailscale SSH: włączone (root wyłączony w ACL: tak / nie) / nie
 - Następny krok (opcjonalnie): udostępnienie jednej maszyny drugiej osobie (Machines → Share),
   panel wewnętrzny bota tylko z tailnetu (bind na `TS_IP`)
 
@@ -672,7 +702,8 @@ Podsumowanie na koniec:
 - nie zmienia `sshd_config`, portu SSH ani `PermitRootLogin`,
 - nie zamyka publicznego SSH przed dwoma dowodami z Fazy 3,
 - nie prosi o tokeny ani auth keye w czacie,
-- nie konfiguruje exit node, subnet routera, Funnel ani ACL - to osobne tematy,
+- nie konfiguruje exit node, subnet routera ani Funnel - to osobne tematy,
+- nie edytuje ACL tailnetu; jedyna zmiana ACL (root poza Tailscale SSH, 4b) to klik użytkownika,
 - nie instaluje Headscale (self-hosted zamiennik serwera koordynacyjnego) - jedno zdanie dla
   zainteresowanych: to kolejny serwer do utrzymania,
 - nie edytuje cudzych `docker-compose.yml` bez pokazania diffu i zgody.
