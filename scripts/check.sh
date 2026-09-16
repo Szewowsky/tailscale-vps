@@ -194,10 +194,12 @@ if command -v ufw >/dev/null 2>&1 && [[ $HAVE_ROOT -eq 1 ]]; then
         fi
         for p in $SSHD_PORTS; do
             if echo "$UFW_STATUS" | grep -qE "^$p(/tcp)?\s+ALLOW IN\s+Anywhere"; then
+                # Serwer nie widzi firewalla dostawcy - przy Hostingerze ta reguła zostaje celowo:
+                # dzięki niej wyłączenie firewalla w panelu (plan B) przywraca dostęp.
                 if [[ "$BEFORE" -eq 1 ]]; then
-                    info "ufw: port SSH $p otwarty publicznie (Faza 5 to zmieni)"
+                    info "ufw: port SSH $p otwarty publicznie (Faza 5 zamknie go firewallem dostawcy albo ufw)"
                 else
-                    fail "ufw: port SSH $p nadal otwarty publicznie"
+                    warn "ufw przepuszcza port SSH $p z internetu - OK tylko, jeśli zamyka go firewall dostawcy (potwierdź: bash portscan.sh ${PUB_IP:-IP}); bez firewalla dostawcy zrób Fazę 5c"
                 fi
             fi
         done
