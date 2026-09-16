@@ -480,7 +480,8 @@ Sprawdź i wypisz w czacie:
 1. Faza 3: "MOST DZIAŁA: [urządzenie 1], [urządzenie 2]" - oba dowody są? Jeśli nie → STOP.
 2. Faza 4a: `KeyExpiry = None`? Jeśli nie → STOP.
 3. Plan B użytkownika (Zasada 3): gdzie wyłączy firewall, jeśli straci dostęp? Hostinger: hPanel →
-   VPS → Firewall → przełącznik przy grupie (działa z telefonu). Inni: konsola VNC/serial w panelu.
+   VPS → Firewall → przełącznik przy grupie (działa z telefonu; działa, bo ufw przepuszcza `PORT` -
+   patrz 5b). Inni: konsola VNC/serial w panelu.
    Użytkownik odpowiada własnymi słowami. Zapisz.
 4. Co zostaje publiczne: 80/443 (jeśli WWW) + UDP 41641 (Tailscale). Nic więcej.
 
@@ -488,8 +489,16 @@ Dopiero po czterech "tak" idziesz do 5b albo 5c.
 
 ### 5b. Hostinger - firewall w panelu przez API
 
-Firewall Hostingera działa **przed** serwerem (na hiperwizorze), więc Docker go nie omija i ufw jest
-zbędny. Regułą domyślną grupy jest **drop** wszystkiego, co nie jest na liście accept.
+Firewall Hostingera działa **przed** serwerem (na hiperwizorze), więc Docker go nie omija, a do
+zamknięcia portu ufw nie jest potrzebny. Regułą domyślną grupy jest **drop** wszystkiego, co nie jest
+na liście accept.
+
+**Aktywny ufw (po vps-security) zostaje bez zmian - razem z regułą dla `PORT`.** W tej ścieżce to nie
+luka, tylko warunek planu B: port zamyka firewall w panelu, a gdy użytkownik go wyłączy (przełącznik),
+wejście wraca właśnie dzięki regule w ufw. Bez niej przełącznik nic nie da, a konsola noVNC loguje jako
+root (zablokowany). Nie proponuj usuwania `PORT` z ufw. SSH przez tailnet od ufw i tak nie zależy:
+tailscaled wstawia własny łańcuch `ts-input` przed ufw i sam wpuszcza `tailscale0` + UDP 41641.
+Audyt PO pokaże tę regułę jako WARN - to oczekiwane, dowodem zamknięcia jest skan z 5d.
 
 Token API: użytkownik tworzy w hPanel → **API** (menu konta) i eksportuje **sam w swoim terminalu**:
 

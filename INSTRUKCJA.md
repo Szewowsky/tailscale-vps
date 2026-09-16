@@ -230,6 +230,10 @@ Activate na serwerze.
 Wycofanie: przełącznik w panelu albo
 `python3 ./scripts/hostinger-firewall.py off --vm ID_SERWERA FIREWALL_ID`.
 
+**ufw na serwerze zostaw jak jest, z regułą dla portu SSH.** To dzięki niej przełącznik w panelu
+przywraca dostęp (konsola web loguje jako root, a ten po hardeningu nie wchodzi). Przez tailnet
+wchodzisz niezależnie od ufw - Tailscale sam wpuszcza swój ruch przed regułami ufw.
+
 ### Wariant B: inny dostawca (ufw na serwerze)
 
 Zaloguj się **przez tailnet** (`ssh twoj_user@TS_IP`), bo w trakcie publiczne wejście zniknie:
