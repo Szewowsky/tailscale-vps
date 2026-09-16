@@ -169,7 +169,8 @@ serwer nie - wypada z sieci, a jeśli publiczne SSH jest już zamknięte, zostaj
 tailscale status --json | grep KeyExpiry
 ```
 
-Brak linii albo `"KeyExpiry": null` = wyłączone. Data = nadal włączone.
+Brak linii albo `"KeyExpiry": null` = wyłączone. Data = nadal włączone. Sprawdź jeszcze raz po pół
+minucie - tuż po kliknięciu wynik bywa chwilowy (drugi klik w tym samym menu włącza wygasanie z powrotem).
 
 **Opcjonalnie - Tailscale SSH** (logowanie bez kluczy, tożsamość daje tailnet; zwykły sshd zostaje).
 Uruchom w sesji po **publicznym IP**, bo przełączenie może zerwać sesję po adresie Tailscale:

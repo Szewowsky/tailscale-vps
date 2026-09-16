@@ -402,15 +402,27 @@ Klik użytkownika (nie da się tego zrobić z CLI bez API):
 konsola **https://login.tailscale.com/admin/machines** → wiersz `NAZWA` → menu `...` po prawej →
 **Disable key expiry**.
 
-Sprawdzenie na serwerze:
+Sprawdzenie na serwerze - **trzy odczyty w ciągu 30 s**, nie jeden. Tuż po kliknięciu odczyt `None`
+bywa chwilowy: w teście pętla złapała `None`, a sekundę później wróciła ta sama data (najpewniej drugi
+klik w menu, które po pierwszym zmienia się na "Enable key expiry", włączył wygasanie z powrotem).
 
 ```bash
-ssh -p PORT USER@IP "tailscale status --json | python3 -c \"import json,sys; s=json.load(sys.stdin)['Self']; print('KeyExpiry =', s.get('KeyExpiry'))\""
+cat > /tmp/f4a.sh <<'EOS'
+#!/usr/bin/env bash
+for i in 1 2 3; do
+  echo "$(date +%T) KeyExpiry = $(tailscale status --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["Self"].get("KeyExpiry"))')"
+  if [ "$i" -lt 3 ]; then sleep 15; fi
+done
+EOS
+scp -P PORT /tmp/f4a.sh USER@IP:/tmp/f4a.sh
+ssh -p PORT USER@IP "bash /tmp/f4a.sh; rm -f /tmp/f4a.sh"
 ```
 
-Oczekiwany wynik: `KeyExpiry = None`. Data (np. `2027-03-14T...`) = wygasanie nadal włączone.
+Oczekiwany wynik: trzy linie `KeyExpiry = None`. Data (np. `2027-03-14T...`) = wygasanie nadal włączone.
+Mieszanka `None` i daty → poproś użytkownika, żeby otworzył menu `...` przy serwerze: ma tam być
+**Enable key expiry** (czyli wygasanie jest wyłączone). Jest "Disable" → kliknąć raz i powtórzyć odczyty.
 
-**Test zaliczenia:** `KeyExpiry = None`.
+**Test zaliczenia:** `KeyExpiry = None` we wszystkich trzech odczytach.
 
 ### 4b. Tailscale SSH (opcjonalne, ale warto pokazać)
 
