@@ -506,22 +506,37 @@ python3 ./scripts/hostinger-firewall.py setup --vm VM_ID
 python3 ./scripts/hostinger-firewall.py setup --vm VM_ID --web
 ```
 
-Skrypt: tworzy grupę `tailscale-lockdown-VM_ID`, dodaje accept UDP 41641 (+ TCP 80/443 przy `--web`),
-aktywuje na VM, wywołuje `sync` i wypisuje `FIREWALL_ID`. Zapisz `FIREWALL_ID` - służy do wycofania.
+Skrypt: tworzy grupę `tailscale-lockdown-VM_ID` (albo używa istniejącej o tej nazwie - drugie
+uruchomienie nie robi duplikatu), dodaje brakujące accept UDP 41641 (+ TCP 80/443 przy `--web`),
+przypina grupę do VM, wywołuje `sync` i wypisuje `FIREWALL_ID`. Zapisz `FIREWALL_ID` - służy do wycofania.
 
-Sprawdzenie (GET):
+Jeśli `list` pokazał przy VM `firewall_group_id` inne niż `None`, serwer ma już jakąś grupę - `setup`
+ją zastąpi (zostaje na koncie). Powiedz to użytkownikowi, zanim uruchomi komendę.
+
+Sprawdzenie (GET) - `FIREWALL_ID` do wycofania bierz z tego wyniku:
 
 ```bash
 python3 ./scripts/hostinger-firewall.py status --vm VM_ID
 ```
 
-Oczekiwany wynik: grupa z regułami, `is_synced: true`, `VM firewall_group_id: FIREWALL_ID`.
+Oczekiwany wynik: `VM ... -> firewall_group_id: FIREWALL_ID` i wiersz tej grupy z `is_synced true`,
+regułami accept i znacznikiem `<- PRZYPIĘTA DO TEJ VM`. Wiersz `<- NIEPRZYPIĘTA ... sierota` to duplikat
+z wcześniejszego przebiegu - użytkownik usuwa go w hPanelu. Grupy innych serwerów skrypt wypisuje tylko
+z nazwy: nie ruszać.
+
+Co użytkownik zobaczy w hPanel → VPS → Zapora sieciowa (Firewall): listę **wszystkich** grup na koncie,
+a przełącznik przy grupie mówi tylko, czy jest przypięta do **tego** serwera, który ogląda. Grupy innych
+serwerów są tam wyłączone i to normalne - nie przełączać ich. Jeden serwer = jedna aktywna grupa.
 
 Wycofanie (plan B z terminala, jeśli użytkownik nadal ma tailnet):
 
 ```bash
 python3 ./scripts/hostinger-firewall.py off --vm VM_ID FIREWALL_ID
 ```
+
+Sprzątanie: po skasowaniu serwera (np. testowego) grupa `tailscale-lockdown-VM_ID` zostaje na koncie
+jako sierota - można ją usunąć w hPanelu (Zapora sieciowa → `...` przy grupie → Usuń). Grup innych
+serwerów nie ruszać.
 
 Firewall Hostingera filtruje **IPv4 i IPv6** (sshd słucha też na `[::]:22`, sprawdzone: 22 po IPv6
 zamknięte). Reguły wchodzą w życie w **poniżej minuty** (dokumentacja: "two minutes or less"); po
@@ -584,7 +599,7 @@ Test negatywny (do filmu): `ssh -p PORT -o ConnectTimeout=5 USER@IP` → `Connec
 **FAIL - co zrobić:**
 - port SSH nadal OPEN po Hostingerze → `status` pokazuje `is_synced: false`? Uruchom
   `python3 ./scripts/hostinger-firewall.py sync --vm VM_ID FIREWALL_ID` (użytkownik) i skanuj ponownie
-  po 30 s. Nadal open → sprawdź, czy `VM firewall_group_id` to właściwa grupa.
+  po 30 s. Nadal open → sprawdź w `status`, czy wiersz `PRZYPIĘTA DO TEJ VM` to grupa z `setup`.
 - SSH przez tailnet nie działa po zamknięciu → **natychmiast plan B**: wyłącz firewall (panel / `off`)
   i wróć do Fazy 3. Nie próbuj "jeszcze jednej reguły" na ślepo.
 

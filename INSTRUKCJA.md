@@ -212,9 +212,13 @@ Znajdź `id` serwera po IP. Potem:
 python3 ./scripts/hostinger-firewall.py setup --vm ID_SERWERA
 ```
 
-Z publicznym WWW na 80/443 dodaj `--web`. Skrypt tworzy grupę `tailscale-lockdown-ID`, wpuszcza
-UDP 41641 (+ 80/443), aktywuje ją na serwerze i wypisuje `FIREWALL_ID`. Wszystko inne (w tym SSH)
-jest odrzucane.
+Z publicznym WWW na 80/443 dodaj `--web`. Skrypt tworzy grupę `tailscale-lockdown-ID` (przy
+ponownym uruchomieniu używa tej samej), wpuszcza UDP 41641 (+ 80/443), aktywuje ją na serwerze
+i wypisuje `FIREWALL_ID`. Wszystko inne (w tym SSH) jest odrzucane. `status --vm ID_SERWERA` pokazuje,
+która grupa jest przypięta do serwera.
+
+W hPanelu (VPS → Zapora sieciowa) widzisz wszystkie grupy z konta; przełącznik mówi tylko, czy grupa
+jest przypięta do oglądanego serwera. Grupy innych serwerów są tam wyłączone - tak ma być.
 
 Reguły wchodzą w życie w poniżej minuty; firewall filtruje IPv4 i IPv6, ruch wychodzący serwera
 (apt, HTTPS) działa dalej.
