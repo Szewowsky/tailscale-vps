@@ -628,12 +628,17 @@ Test negatywny (do filmu): `ssh -p PORT -o ConnectTimeout=5 USER@IP` → `Connec
 
 ## Faza 6 - Audyt PO + zestawienie
 
+Skrypt kopiujesz **jeszcze raz** - kopia z 1b mogła zniknąć (`/tmp` czyści się przy restarcie) albo być
+starsza niż wersja w repo:
+
 ```bash
+scp -P PORT ./scripts/check.sh USER@TS_IP:/tmp/check.sh
 ssh -p PORT USER@TS_IP "bash /tmp/check.sh 2>&1 | tee /tmp/tailscale-check-after.txt"
 ```
 
 Bez `--before`. Tailscale, tailnet i key expiry mają być na zielono. `check.sh` działa na serwerze,
-więc **nie widzi** firewalla Hostingera - dowodem zamknięcia jest skan z 5d, nie audyt.
+więc **nie widzi** firewalla Hostingera - dowodem zamknięcia jest skan z 5d, nie audyt. W ścieżce
+Hostinger jeden WARN jest oczekiwany: `ufw przepuszcza port SSH ...` (reguła zostaje dla planu B, 5b).
 
 Pokaż użytkownikowi zestawienie:
 

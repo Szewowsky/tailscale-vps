@@ -271,7 +271,10 @@ Port SSH `closed`, `DALEJ_WCHODZE` na ekranie. Stare wejście po publicznym IP:
 
 ## Krok 6: Audyt PO
 
+Skopiuj skrypt jeszcze raz (kopia sprzed godziny mogła zniknąć z `/tmp`):
+
 ```
+scp -P PORT ./scripts/check.sh twoj_user@TS_IP:/tmp/
 ssh -p PORT twoj_user@TS_IP "bash /tmp/check.sh"
 ```
 
