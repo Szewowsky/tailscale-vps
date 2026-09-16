@@ -166,7 +166,8 @@ else
     info "Brak usług TCP na 0.0.0.0"
 fi
 
-SSHD_PORTS=$(ss -tlnpH 2>/dev/null | grep -E 'sshd' | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | sort -un | tr '\n' ' ')
+# -p (nazwa procesu) dla gniazd roota widać tylko z uprawnieniami - stąd $SUDO
+SSHD_PORTS=$($SUDO ss -tlnpH 2>/dev/null | grep -E 'sshd' | awk '{print $4}' | sed -E 's/.*:([0-9]+)$/\1/' | sort -un | tr '\n' ' ')
 if [[ -n "$SSHD_PORTS" ]]; then
     pass "sshd nasłuchuje na porcie: $SSHD_PORTS (zostaje - wejście przez tailnet idzie tym samym sshd)"
 elif [[ $HAVE_ROOT -eq 0 ]]; then
