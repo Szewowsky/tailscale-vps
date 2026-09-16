@@ -288,7 +288,23 @@ To jest faza, która **odblokowuje** Fazę 5. Bez dwóch dowodów nie zamykasz n
 
 ```bash
 TS ping -c 3 TS_IP
-ssh -p PORT -o ConnectTimeout=10 USER@TS_IP "echo TAILNET_SSH_OK; hostname"
+```
+
+Klucz hosta: `known_hosts` zna serwer tylko pod publicznym `IP` (z 1a). Pierwsze `ssh USER@TS_IP` bez
+terminala nie może zapytać o nowy klucz i kończy się `Host key verification failed`. To ten sam serwer,
+więc odcisk ma być identyczny - porównaj, zanim cokolwiek dopiszesz:
+
+```bash
+ssh-keygen -l -F IP | grep -i ed25519        # PORT inny niż 22: ssh-keygen -l -F '[IP]:PORT'
+ssh-keyscan -p PORT -t ed25519 TS_IP 2>/dev/null | ssh-keygen -lf -
+```
+
+Oczekiwany wynik: ten sam `SHA256:...` w obu liniach. Różny → STOP, pokaż użytkownikowi (pod `TS_IP`
+odpowiada inna maszyna). Zgodny → łączysz się z `accept-new` (dopisuje nowy wpis, a zmieniony klucz
+nadal odrzuca):
+
+```bash
+ssh -p PORT -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new USER@TS_IP "echo TAILNET_SSH_OK; hostname"
 ```
 
 Oczekiwany wynik:
@@ -301,8 +317,9 @@ Oczekiwany wynik:
 Wyjaśnij użytkownikowi jednym zdaniem, co widzi: to samo SSH, ten sam port, ale po **prywatnym adresie**,
 którego internet nie zna.
 
-Opcjonalnie MagicDNS: `ssh -p PORT USER@NAZWA` powinno działać tak samo (nazwa zamiast adresu). Jeśli nie
-działa, nie blokuj - MagicDNS bywa wyłączone w tailnecie, adres `100.x` wystarcza.
+Opcjonalnie MagicDNS: `ssh -p PORT -o StrictHostKeyChecking=accept-new USER@NAZWA` powinno działać tak
+samo (nazwa zamiast adresu). Jeśli nie działa, nie blokuj - MagicDNS bywa wyłączone w tailnecie, adres
+`100.x` wystarcza.
 
 ### 3b. Z drugiego urządzenia (telefon na LTE)
 
@@ -330,6 +347,12 @@ użytkownika z telefonu (3b, wariant A lub B). Zapisz oba jako "MOST DZIAŁA: [u
 **FAIL - co zrobić:**
 - `ping` timeout → serwer nie jest online w tailnecie (`tailscale status` na serwerze); albo
   komputer i serwer są na różnych kontach.
+- `Host key verification failed` po `TS_IP` → brak wpisu w `known_hosts` dla tego adresu. Porównaj
+  odcisk (3a) i połącz się z `-o StrictHostKeyChecking=accept-new`.
+- `REMOTE HOST IDENTIFICATION HAS CHANGED` / `Host key for NAZWA has changed` → w `known_hosts` wisi
+  stary klucz z poprzedniej instalacji serwera o tej samej nazwie (albo tym samym adresie 100.x).
+  Zapytaj, czy serwer był reinstalowany. Jeśli tak: `ssh-keygen -R NAZWA` (i `ssh-keygen -R TS_IP`,
+  jeśli to on protestuje), potem jeszcze raz porównanie odcisku i `accept-new`. Nie wie → STOP.
 - SSH przez `TS_IP` odmawia, a przez `IP` działa → sshd słucha tylko na publicznym adresie
   (`ListenAddress` w `sshd_config`). Nie zmieniaj tego sam - pokaż użytkownikowi
   `grep -i ListenAddress /etc/ssh/sshd_config` i zapytaj.
@@ -387,7 +410,8 @@ Test z komputera użytkownika - port **22** po adresie Tailscale, niezależnie o
 (Tailscale SSH przechwytuje port 22 na adresie 100.x):
 
 ```bash
-ssh -o ConnectTimeout=10 USER@TS_IP "echo TS_SSH_LOGIN_OK"
+# accept-new: przy PORT innym niż 22 known_hosts nie zna jeszcze TS_IP:22 (klucz hosta jest ten sam, z /etc/ssh)
+ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new USER@TS_IP "echo TS_SSH_LOGIN_OK"
 ```
 
 Przy pierwszym połączeniu może pojawić się link do potwierdzenia w przeglądarce (tryb `check`) -
