@@ -61,6 +61,23 @@ else
     HAVE_ROOT=0
 fi
 
+# tailscaled (NetfilterMode on, domyślne na Linuksie) wstawia do INPUT skok do własnego łańcucha
+# ts-input PRZED regułami ufw i sam wpuszcza tam tailscale0 oraz UDP 41641 - jak Docker, omija ufw.
+ts_input_before_ufw() {
+    [[ $HAVE_ROOT -eq 1 ]] || return 1
+    local first
+    if $SUDO iptables -S ts-input 2>/dev/null | grep -qE -- '-i tailscale0 -j ACCEPT'; then
+        first=$($SUDO iptables -S INPUT 2>/dev/null | grep -oE -- '-j (ts-input|ufw-[a-z-]+)' | head -1)
+        [[ "$first" == "-j ts-input" ]]
+    elif $SUDO nft list chain ip filter ts-input 2>/dev/null | grep -qE 'iifname "tailscale0" .*accept'; then
+        # tailscaled w trybie nftables: te same łańcuchy, czytelne tylko przez nft
+        first=$($SUDO nft list chain ip filter INPUT 2>/dev/null | grep -oE 'jump (ts-input|ufw-[a-z-]+)' | head -1)
+        [[ "$first" == "jump ts-input" ]]
+    else
+        return 1
+    fi
+}
+
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║       AUDYT SERWERA POD TAILSCALE        ║"
@@ -189,8 +206,12 @@ if command -v ufw >/dev/null 2>&1 && [[ $HAVE_ROOT -eq 1 ]]; then
         fi
         if echo "$UFW_STATUS" | grep -qE "tailscale0|41641/udp"; then
             pass "ufw przepuszcza Tailscale (tailscale0 / 41641/udp)"
+        elif ts_input_before_ufw; then
+            pass "Tailscale wpuszcza się sam: łańcuch ts-input (tailscaled) stoi przed ufw i akceptuje tailscale0 + 41641/udp - reguły w ufw zbędne"
+        elif [[ "$BEFORE" -eq 1 ]]; then
+            info "ufw bez reguł dla Tailscale - OK: tailscaled po zalogowaniu (Faza 2) sam wstawi łańcuch ts-input przed ufw"
         else
-            warn "ufw nie ma reguły dla tailscale0 ani 41641/udp - Tailscale może działać tylko przez przekaźnik"
+            warn "ufw nie ma reguły dla tailscale0 ani 41641/udp, a tailscaled nie wstawił łańcucha ts-input (netfilter-mode off?) - Tailscale może działać tylko przez przekaźnik"
         fi
         for p in $SSHD_PORTS; do
             if echo "$UFW_STATUS" | grep -qE "^$p(/tcp)?\s+ALLOW IN\s+Anywhere"; then
