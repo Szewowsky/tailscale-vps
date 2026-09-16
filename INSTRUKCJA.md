@@ -139,7 +139,10 @@ ssh -p PORT twoj_user@TS_IP
 
 Z telefonu, **na LTE** (Wi-Fi wyłączone), Tailscale włączony:
 
-- wariant A: aplikacja SSH (Termius, Blink) → `twoj_user@TS_IP`, port `PORT`,
+- wariant A: aplikacja SSH (Termius, Blink) → `twoj_user@TS_IP`, port `PORT`, **własnym kluczem
+  telefonu**: wygeneruj go w aplikacji (Termius: Keychain → Generate Key), a jego publiczną część
+  (linia `ssh-ed25519 ...`) dopisz z komputera do `~/.ssh/authorized_keys` na serwerze. "Export to host"
+  nie zadziała, jeśli logowanie hasłem jest wyłączone,
 - wariant B: na serwerze uruchom na 2 minuty stronę testową tylko na adresie Tailscale
   i otwórz w przeglądarce telefonu `http://TS_IP:8000`:
 

@@ -328,6 +328,35 @@ Dwa warianty, użytkownik wybiera:
 **Wariant A - aplikacja SSH na telefonie** (Termius, Blink, a-Shell): połączenie z `USER@TS_IP`
 na porcie `PORT` kluczem. Dowód: prompt serwera na ekranie telefonu.
 
+Skąd telefon ma klucz: po vps-security logowanie hasłem jest wyłączone, a Tailscale SSH (4b) jeszcze
+nie działa, więc odpowiada zwykły sshd i wpuszcza tylko klucze z `authorized_keys`. Telefon dostaje
+**własny** klucz (klucza prywatnego z komputera nie przenoś):
+
+1. W aplikacji wygeneruj klucz ED25519 (Termius: Keychain → Generate Key; Blink: Settings → Keys → +).
+2. Skopiuj jego **publiczną** część (jedna linia `ssh-ed25519 AAAA... nazwa`) i przekaż na komputer
+   (notatka, AirDrop, mail do siebie). Wklejenie jej do czatu jest OK - to nie sekret. Tekst z
+   `PRIVATE KEY` to klucz prywatny: nie używaj go, niech użytkownik wygeneruje nowy.
+3. Za zgodą użytkownika sprawdź i dopisz klucz z komputera (publiczne IP jeszcze działa,
+   `sshd_config` bez zmian, dopisanie jest idempotentne):
+
+```bash
+echo 'ssh-ed25519 AAAA... iphone' | ssh-keygen -lf -     # ma wypisać odcisk, nie błąd
+ssh -p PORT USER@IP "K='ssh-ed25519 AAAA... iphone'; umask 077; mkdir -p ~/.ssh; grep -qxF \"\$K\" ~/.ssh/authorized_keys 2>/dev/null || echo \"\$K\" >> ~/.ssh/authorized_keys; echo KEY_ADDED"
+```
+
+"Export to host" w Termiusie (i podobne "wyślij klucz na serwer") **nie zadziała**: aplikacja musi się
+najpierw sama zalogować, żeby dopisać klucz, a hasła są wyłączone.
+
+Przy pierwszym połączeniu aplikacja pokaże odcisk klucza hosta (Termius często ECDSA, nie ED25519) -
+porównaj z `ssh-keyscan -p PORT TS_IP 2>/dev/null | ssh-keygen -lf -`.
+
+Dowód, że telefon był poza domową siecią: na serwerze `tailscale status` **w trakcie sesji** (bez
+ruchu wiersz pokazuje tylko `-`) → wiersz telefonu `active; direct <IP>:<port>` ma pokazywać inny adres
+niż domowe IP komputera (ten sam = telefon nadal na Wi-Fi).
+
+Użytkownik i tak włączy Tailscale SSH (4b)? Wtedy klucz na telefonie przestanie być potrzebny - do
+samego testu szybszy jest wariant B.
+
 **Wariant B - bez aplikacji SSH, przez przeglądarkę** (szybszy do demo). Na serwerze na 60 sekund
 podnosisz stronę testową **wyłącznie na adresie Tailscale** (nie na 0.0.0.0, więc internet jej nie widzi):
 
