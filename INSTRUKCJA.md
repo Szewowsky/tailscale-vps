@@ -71,6 +71,37 @@ ssh -t twoj_user@TWOJE_IP "sudo journalctl -u ssh --since '24 hours ago' | grep 
 Bez `sudo` zwykły użytkownik nie widzi logów sshd i dostaje `0`. Wynik obejmuje też Twoje własne
 nieudane próby (np. z hardeningu).
 
+## Zaktualizuj system (zanim cokolwiek schowasz)
+
+Schowanie SSH za tailnetem nie łata pakietów - to dwie różne rzeczy i obie trzeba zrobić. Na serwerze:
+
+```
+sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+```
+
+Potem sprawdź, czy system czeka na restart:
+
+```
+uname -r
+ls /var/run/reboot-required
+```
+
+Plik istnieje = doszło nowe jądro (albo biblioteka systemowa), ale **działa jeszcze stare** - trzeba
+zrestartować: `sudo systemctl reboot`. Sesja SSH urwie się od razu, serwer wstaje ok. 60 sekund,
+wracasz **po publicznym IP** (Tailscale'a jeszcze nie ma, więc adresu `100.x` też nie). Po powrocie
+`uname -r` ma pokazać wyższy numer niż przed restartem. Masz na serwerze coś publicznego (stronę,
+webhooki)? Wybierz moment na tę minutę przerwy sam.
+
+Masz `unattended-upgrades` (np. po vps-security)? Wtedy `upgrade` nie będzie miał czego robić -
+i tak przejdź ten krok, bo `unattended-upgrades` **nie restartuje** serwera, więc
+`/var/run/reboot-required` potrafi wisieć tygodniami. `Could not get lock /var/lib/dpkg/...` = te
+aktualizacje właśnie chodzą w tle; odczekaj 2-3 minuty i powtórz.
+
+**Nie daj się nabrać na numer jądra.** Ubuntu łata starą linię jądra bez zmiany głównego numeru:
+w `6.8.0-124` rośnie tylko `N` (124 = kolejne łatane wydanie tej samej linii). Samo `6.8.0` nie
+znaczy "stare jądro" - o załataniu mówi `N` i data pakietu, nie `6.8`.
+
 ---
 
 ## Krok 1: Tailscale na komputerze i telefonie
@@ -297,6 +328,26 @@ Hostingera - dowodem zamknięcia jest skan z Kroku 5.
 
 **Co dalej (osobne tematy):** udostępnienie jednej maszyny drugiej osobie (Machines → Share),
 panel bota tylko z tailnetu (bind na `TS_IP`), exit node (telefon wychodzi do internetu przez serwer).
+
+### Ładniejszy adres zamiast `http://TS_IP:8000`: `tailscale serve`
+
+Masz na serwerze panel (n8n, Grafana, stronę testową z Kroku 3) i nie chcesz wpisywać adresu
+`100.x` z portem? Jedna komenda:
+
+```
+sudo tailscale serve --bg 8000
+tailscale serve status
+tailscale serve reset
+```
+
+Usługa z portu 8000 dostaje `https://NAZWA.TAILNET.ts.net` z **prawdziwym certyfikatem** (bez
+ostrzeżeń przeglądarki), widoczny **tylko dla Twoich urządzeń w tailnecie**. `--bg` znaczy, że
+konfiguracja jest trwała i przeżywa restart serwera; bez `--bg` komenda trzyma terminal i gaśnie
+razem z sesją. `status` pokazuje, co jest wystawione, `reset` zdejmuje wszystko. Jeśli komenda wypisze link o
+"HTTPS Certificates", włącz to w konsoli Tailscale (DNS → HTTPS Certificates) i odpal ponownie.
+
+**Nie myl z `funnel`.** `tailscale serve` = Twoja sieć. `tailscale funnel` = cały internet, czyli
+dokładne odwrócenie tego, co zrobiłeś w Kroku 5. Ten poradnik funnela nie konfiguruje.
 
 ---
 

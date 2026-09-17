@@ -24,7 +24,7 @@ Da się przejść ten wizard także na świeżym serwerze z rootem (tak robię w
 ## Co dostajesz?
 
 - **Wizard dla Claude Code** - 7 faz (F0-F6), każda z komendą, oczekiwanym wynikiem, testem zaliczenia i planem B
-- **Skrypt audytu** - `scripts/check.sh` sprawdza serwer PRZED i PO: Tailscale, tailnet, key expiry, porty nasłuchujące
+- **Skrypt audytu** - `scripts/check.sh` sprawdza serwer PRZED i PO: Tailscale, tailnet, key expiry, porty nasłuchujące, jądro i oczekujący restart po aktualizacji
 - **Skan portów z Twojego komputera** - `scripts/portscan.sh` pokazuje, co widzi internet PRZED i PO
 - **Firewall Hostingera przez API** - `scripts/hostinger-firewall.py` tworzy grupę reguł i przypina ją do VPS (dla innych dostawców: ufw, z ostrzeżeniem o Dockerze)
 - **Instrukcja tekstowa** - `INSTRUKCJA.md` dla tych, którzy wolą kopiować komendy ręcznie
@@ -91,7 +91,7 @@ ssh twoj_user@TWOJE_IP "bash /tmp/check.sh --before"
 | # | Faza | Test zaliczenia |
 |---|------|-----------------|
 | F0 | Dane: adres, użytkownik, port SSH, dostawca, drugie urządzenie | wszystkie pola zebrane, nic nie zgadywane |
-| F1 | Audyt PRZED + skan portów z Twojego komputera | `check.sh --before` bez FAIL w wymaganiach; skan pokazuje port SSH otwarty (to jest "przed") |
+| F1 | Audyt PRZED + skan portów z Twojego komputera + aktualizacja systemu | `check.sh --before` bez FAIL w wymaganiach; skan pokazuje port SSH otwarty (to jest "przed"); `apt-get upgrade` przeszedł, a `/var/run/reboot-required` jest obsłużony (restart za zgodą) |
 | F2 | Tailscale na serwerze + `tailscale up` | serwer widoczny w `tailscale status` na Twoim komputerze |
 | F3 | Test nowego mostu: SSH przez tailnet z komputera I z telefonu | dwa udane logowania po adresie `100.x.y.z`; `tailscale ping` mówi `direct` albo `relay` |
 | F4 | Key expiry OFF (+ opcjonalnie Tailscale SSH bez kluczy) | `check.sh` pokazuje "key expiry wyłączone" |

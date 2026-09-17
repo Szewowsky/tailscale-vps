@@ -26,8 +26,8 @@ ssh -p PORT USER@IP "bash /tmp/fX.sh; rm -f /tmp/fX.sh"
 ```
 
 `sudo` i `curl ... | sh` wewnątrz **heredoca** zapisywanego do pliku przechodzą. W komendzie inline,
-w `printf` i w `ssh USER@IP "sudo ..."` są **blokowane**. Dlatego każdy krok z `sudo` (F1a, F1c, F2a,
-F2b, F4b, F5c) buduj heredokiem `cat > /tmp/xxx.sh <<'EOS' ... EOS`.
+w `printf` i w `ssh USER@IP "sudo ..."` są **blokowane**. Dlatego każdy krok z `sudo` (F1a, F1c, F1d,
+F2a, F2b, F4b, F5c) buduj heredokiem `cat > /tmp/xxx.sh <<'EOS' ... EOS`.
 
 Jeśli użytkownik jest `root` (świeży serwer bez vps-security), `sudo` w skryptach jest zbędne, ale
 nie szkodzi - `sudo` jako root po prostu działa. Nie przepisuj skryptów.
@@ -98,7 +98,7 @@ i mówisz dlaczego.
 
 ---
 
-## Faza 1 - Audyt PRZED + skan portów
+## Faza 1 - Audyt PRZED + skan portów + aktualizacja systemu
 
 ### 1a. Połączenie
 
@@ -144,6 +144,7 @@ Sprawdzasz w wyniku:
 | Ubuntu 22.04 / 24.04 | PASS (inne = WARN, install.sh Tailscale i tak obsługuje większość dystrybucji) |
 | root albo sudo bez hasła | PASS |
 | Tailscale | WARN "(instaluje Faza 2)" - to jest normalne PRZED |
+| Jądro + `reboot-required` | INFO z `uname -r`; WARN "system czeka na restart" = robisz to w 1d |
 | Porty nasłuchujące publicznie | lista informacyjna: zapisz ją, wrócisz do niej w Fazie 5 i 6 |
 | Docker + kontenery z portami na 0.0.0.0 | jeśli są: WARN "Docker omija ufw" - zapamiętaj na Fazę 5 |
 
@@ -186,6 +187,82 @@ Oczekiwany wynik: `PROBY_24H=N` i lista adresów. Odejmij próby z IP komputera 
 (`curl -4 -s https://ifconfig.me` u niego) - jego testy z hardeningu też tu trafiają. Reszta to obcy.
 Na serwerze z adresem, który długo wisi w sieci, po 3 godzinach potrafi być kilka, po tygodniu setki;
 świeżo przydzielony adres bywa czysty (0). Powiedz użytkownikowi liczbę obcych.
+
+### 1d. Aktualizacja systemu (przed chowaniem serwera)
+
+Zanim schowasz serwer, załataj go. Chowanie SSH za tailnetem nie naprawia dziury w pakiecie, który
+i tak jest wystawiony na 80/443 - to dwie różne warstwy i obie muszą być zrobione.
+
+**Powiedz użytkownikowi jedno zdanie o numerach jądra:** Ubuntu łata stare linie jądra bez zmiany
+głównego numeru - w `6.8.0-124` rośnie tylko `N` (124 = kolejne łatane wydanie tej samej linii),
+więc samo "6.8.0" nie znaczy "stare jądro"; o załataniu mówi `N` i data pakietu, nie `6.8`.
+
+```bash
+cat > /tmp/f1d.sh <<'EOS'
+#!/usr/bin/env bash
+set -euo pipefail
+echo "KERNEL_PRZED=$(uname -r)"
+sudo apt-get update
+sudo DEBIAN_FRONTEND=noninteractive apt-get upgrade -y
+echo "UPGRADE_DONE"
+if [ -f /var/run/reboot-required ]; then
+  echo "REBOOT_REQUIRED=tak"
+  echo "Pakiety: $(sort -u /var/run/reboot-required.pkgs 2>/dev/null | tr '\n' ' ')"
+else
+  echo "REBOOT_REQUIRED=nie"
+fi
+EOS
+scp -P PORT /tmp/f1d.sh USER@IP:/tmp/f1d.sh
+ssh -p PORT USER@IP "bash /tmp/f1d.sh; rm -f /tmp/f1d.sh"
+```
+
+Oczekiwany wynik: `KERNEL_PRZED=...`, log `apt`, `UPGRADE_DONE` i `REBOOT_REQUIRED=tak|nie`.
+
+Serwer po `vps-security` ma `unattended-upgrades`, więc zwykle nie ma czego doinstalowywać i krok
+trwa kilkanaście sekund - **i tak go wykonaj**: to on pokazuje w czacie, że system jest załatany,
+a `unattended-upgrades` sam z siebie **nie restartuje** maszyny, więc `/var/run/reboot-required` może
+wisieć od tygodni.
+
+**`REBOOT_REQUIRED=tak` → restart tylko za zgodą użytkownika.** Zapytaj wprost i powiedz, co się
+stanie: sesja SSH urywa się w tej sekundzie, serwer wstaje ok. 60 sekund, wracasz po **publicznym
+IP** (Tailscale jeszcze nie jest zainstalowany, adresu `100.x` nie ma). Jeśli na serwerze coś działa
+publicznie (WWW, webhooki, boty), użytkownik decyduje, czy to jest moment na minutę przerwy - można
+zrestartować później, ale wtedy nowe jądro jeszcze nie działa i powiedz to wprost.
+
+```bash
+cat > /tmp/f1d-reboot.sh <<'EOS'
+#!/usr/bin/env bash
+sudo systemctl reboot
+EOS
+scp -P PORT /tmp/f1d-reboot.sh USER@IP:/tmp/f1d-reboot.sh
+# rozłączenie w trakcie tej komendy jest oczekiwane - serwer wyłącza sshd w połowie zdania
+ssh -p PORT USER@IP "bash /tmp/f1d-reboot.sh" || true
+```
+
+Powrót (po publicznym `IP`, nie po `TS_IP`) - pętla czeka do ok. 2 minut:
+
+```bash
+for i in $(seq 1 12); do
+  ssh -p PORT -o ConnectTimeout=10 -o BatchMode=yes USER@IP "echo BACK_AFTER_REBOOT; uname -r" && break
+  sleep 10
+done
+```
+
+Oczekiwany wynik: `BACK_AFTER_REBOOT` i numer jądra z wyższym `N` niż `KERNEL_PRZED`. Pokaż
+użytkownikowi obie wartości obok siebie - to jest dowód do filmu i do komentarzy.
+
+**Test zaliczenia:** `UPGRADE_DONE` oraz `REBOOT_REQUIRED=nie`, albo (po restarcie za zgodą)
+`BACK_AFTER_REBOOT` z nowym `uname -r`. Użytkownik świadomie odłożył restart → zapisz to w czacie
+i przypomnij w podsumowaniu Fazy 6.
+
+**FAIL - co zrobić:**
+- `Could not get lock /var/lib/dpkg/lock-frontend` → w tle pracuje `unattended-upgrades`. Nie zabijaj
+  procesu; odczekaj 2-3 minuty i powtórz skrypt.
+- błąd `apt-get update` (brak DNS / repo) → sprawdź `curl -I https://archive.ubuntu.com`. Bez wyjścia
+  do internetu Faza 2 też nie zadziała (instalacja Tailscale) - napraw teraz.
+- serwer nie wraca po 2 minutach → **nie panikuj i nie zamykaj niczego**: publiczny SSH jest jeszcze
+  otwarty, więc plan B to konsola VNC/serial w panelu dostawcy. Poczekaj kolejne 2 minuty, potem STOP
+  i pokaż użytkownikowi.
 
 ---
 
@@ -694,8 +771,33 @@ Podsumowanie na koniec:
 - Plan B: [odpowiedź użytkownika z 5a]
 - Firewall: Hostinger grupa `FIREWALL_ID` / ufw
 - Tailscale SSH: włączone (root wyłączony w ACL: tak / nie) / nie
+- Jądro po aktualizacji z 1d: `uname -r` (restart odłożony: tak / nie)
 - Następny krok (opcjonalnie): udostępnienie jednej maszyny drugiej osobie (Machines → Share),
-  panel wewnętrzny bota tylko z tailnetu (bind na `TS_IP`)
+  panel wewnętrzny bota tylko z tailnetu (bind na `TS_IP`), `tailscale serve --bg` dla HTTPS
+  w tailnecie (sekcja "Co dalej" niżej)
+
+---
+
+## Co dalej (opcjonalnie): `tailscale serve` zamiast gołego portu
+
+Jeśli użytkownik pyta, jak wystawić panel (n8n, Grafana, strona testowa z 3b) ładniej niż przez
+`http://TS_IP:8000`, pokaż mu jedną komendę. To nie jest faza wizarda - nie ma bramek, nie blokuje nic.
+
+```bash
+sudo tailscale serve --bg 8000        # 8000 = port usługi, która już działa lokalnie
+tailscale serve status                # co jest wystawione
+tailscale serve reset                 # sprzątanie: zdejmij wszystko
+```
+
+Co to daje: usługa z portu 8000 dostaje adres `https://NAZWA.TAILNET.ts.net` z **prawdziwym
+certyfikatem** (koniec z ostrzeżeniami przeglądarki), widoczny **wyłącznie dla urządzeń w tailnecie**.
+`--bg` = konfiguracja jest trwała, usługa wstaje po restarcie serwera (bez `--bg` komenda trzyma
+terminal i gaśnie razem z sesją). Wymaga włączonego **HTTPS Certificates** w konsoli Tailscale (DNS →
+HTTPS Certificates); jeśli nie jest, komenda wypisze link do włączenia - to klik użytkownika.
+
+**Ostrzeżenie, powiedz je głośno: `serve` to moja sieć, `funnel` to cały świat.** `tailscale funnel`
+wygląda prawie tak samo, ale publikuje tę samą usługę w publicznym internecie - czyli odwraca to,
+co właśnie zrobiłeś w Fazie 5. Nie myl tych dwóch komend; wizard funnela nie konfiguruje.
 
 ---
 
@@ -704,7 +806,8 @@ Podsumowanie na koniec:
 - nie zmienia `sshd_config`, portu SSH ani `PermitRootLogin`,
 - nie zamyka publicznego SSH przed dwoma dowodami z Fazy 3,
 - nie prosi o tokeny ani auth keye w czacie,
-- nie konfiguruje exit node, subnet routera ani Funnel - to osobne tematy,
+- nie konfiguruje exit node, subnet routera ani **Funnel** (publiczne wystawienie usługi) - to osobne
+  tematy; `tailscale serve` (tylko tailnet) jest opisany wyżej jako opcjonalny krok "co dalej",
 - nie edytuje ACL tailnetu; jedyna zmiana ACL (root poza Tailscale SSH, 4b) to klik użytkownika,
 - nie instaluje Headscale (self-hosted zamiennik serwera koordynacyjnego) - jedno zdanie dla
   zainteresowanych: to kolejny serwer do utrzymania,

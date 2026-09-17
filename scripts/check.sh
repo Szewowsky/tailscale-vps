@@ -109,6 +109,17 @@ else
     warn "Brak sudo bez hasła - punkty wymagające uprawnień pominięte"
 fi
 
+# Jądro: informacyjnie. Ubuntu łata starą linię jądra bez zmiany głównego numeru - w 6.8.0-N rośnie
+# tylko N, więc samo "6.8.0" nie znaczy "stare". Nowe jądro działa dopiero po restarcie, a sygnałem
+# jest plik /var/run/reboot-required (unattended-upgrades sam nie restartuje serwera).
+info "Jądro: $(uname -r) (Ubuntu łata tę samą linię 6.x.0-N: rośnie N, nie 6.x)"
+if [[ -f /var/run/reboot-required ]]; then
+    REBOOT_PKGS=$(sort -u /var/run/reboot-required.pkgs 2>/dev/null | tr '\n' ' ')
+    warn "System czeka na restart po aktualizacji${REBOOT_PKGS:+ (pakiety: $REBOOT_PKGS)} - do czasu restartu działa stare jądro"
+else
+    info "Brak /var/run/reboot-required - system nie czeka na restart"
+fi
+
 PUB_IP=$(curl -4 -fsS --max-time 5 https://ifconfig.me 2>/dev/null || true)
 if [[ -n "$PUB_IP" ]]; then
     info "Publiczny adres IPv4 serwera: $PUB_IP"

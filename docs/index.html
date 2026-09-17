@@ -393,10 +393,13 @@ i kliknięcia w panelu wykonuję sam - Ty mi mówisz, gdzie kliknąć.</pre>
       </div>
       <div class="flow-item">
         <div class="flow-num">F1</div>
-        <div><h4>Audyt PRZED + skan portów</h4>
+        <div><h4>Audyt PRZED, skan portów i aktualizacja systemu</h4>
         <p><code class="inline">check.sh --before</code> na serwerze, <code class="inline">portscan.sh</code>
         z Twojego komputera. Port SSH świeci na czerwono jako OPEN - to jest "przed". Bonus: liczba prób
-        logowania obcych z ostatniej doby.</p></div>
+        logowania obcych z ostatniej doby. Na koniec fazy <code class="inline">apt-get update &amp;&amp;
+        apt-get upgrade</code> i sprawdzenie <code class="inline">/var/run/reboot-required</code> -
+        restart tylko za Twoją zgodą (sesja SSH padnie na ok. minutę, wracasz po publicznym IP, bo
+        Tailscale'a jeszcze nie ma).</p></div>
       </div>
       <div class="flow-item">
         <div class="flow-num">F2</div>
@@ -477,6 +480,25 @@ Otwarte z internetu: <span class="t-fail">1</span></pre>
         </tbody>
       </table>
     </div>
+    <h3>Co dalej: ładniejszy adres niż <code class="inline">http://100.x.y.z:8000</code></h3>
+    <p>Masz na serwerze panel (n8n, Grafana, stronę testową z Fazy 3)? Jedna komenda daje mu adres
+    <code class="inline">https://NAZWA.TAILNET.ts.net</code> z <strong>prawdziwym certyfikatem</strong>,
+    widoczny <strong>tylko dla Twoich urządzeń</strong> w tailnecie:</p>
+    <div class="codeblock">
+      <div class="codebar"><span>Serwer · opcjonalnie</span><button class="copy-btn" data-copy="cb-serve">Kopiuj</button></div>
+      <pre id="cb-serve">sudo tailscale serve --bg 8000   # port usługi, która już działa lokalnie
+tailscale serve status           # co jest wystawione
+tailscale serve reset            # sprzątanie</pre>
+    </div>
+    <p><code class="inline">--bg</code> znaczy "trwale": konfiguracja przeżywa restart serwera. Bez tej
+    flagi komenda trzyma terminal i gaśnie razem z sesją.</p>
+    <div class="warn">
+      <span class="ico">⚠️</span>
+      <p><strong><code class="inline">serve</code> to moja sieć, <code class="inline">funnel</code> to
+      cały świat.</strong> <code class="inline">tailscale funnel</code> wygląda prawie tak samo, ale
+      publikuje usługę w publicznym internecie - czyli odwraca dokładnie to, co zrobiłeś w Fazie 5.
+      Wizard funnela nie konfiguruje.</p>
+    </div>
   </div>
 </section>
 
@@ -549,6 +571,21 @@ Otwarte z internetu: <span class="t-fail">1</span></pre>
         <code class="inline">curl | sh</code> w komendzie inline, nawet zdalnej. Wizard buduje takie kroki
         heredokiem do pliku, kopiuje przez scp i uruchamia na serwerze. Jeśli agent mimo to utknie, prompt
         z Kroku 2 mu to przypomina.</p>
+      </div>
+    </details>
+
+    <details class="droga">
+      <summary><span class="d-num">8</span>"<code class="inline">6.8.0</code> to przecież stare jądro"</summary>
+      <div class="d-body">
+        <p>Ubuntu łata starą linię jądra bez zmiany głównego numeru: w <code class="inline">6.8.0-124</code>
+        rośnie tylko <strong>N</strong> (124 = kolejne łatane wydanie tej samej linii). Samo
+        <code class="inline">6.8.0</code> nie mówi więc nic o tym, czy serwer jest załatany - mówi to
+        <strong>N</strong> i data pakietu.</p>
+        <p>Niezależnie od tego: chowanie SSH za tailnetem <strong>nie łata pakietów</strong>, to dwie różne
+        warstwy. Dlatego Faza 1 kończy się na <code class="inline">apt-get update &amp;&amp; apt-get upgrade</code>
+        i sprawdzeniu <code class="inline">/var/run/reboot-required</code>. Ten plik znaczy, że nowe jądro
+        już jest, ale działa jeszcze stare - trzeba zrestartować. <code class="inline">unattended-upgrades</code>
+        sam serwera nie restartuje, więc taki plik potrafi wisieć tygodniami.</p>
       </div>
     </details>
   </div>
